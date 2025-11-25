@@ -1,0 +1,11 @@
+{application, mcp_bridge, [
+    {description, "Another amazing EMQX plugin."},
+    {vsn, "0.1.0"},
+    {modules, []},
+    {registered, [mcp_bridge_sup]},
+    {applications, [kernel, stdlib, emqx_plugin_helper]},
+    {mod, {mcp_bridge_app, []}},
+    {env, []},
+    {licenses, ["Apache-2.0"]},
+    {maintainers, ["Shawn <506895667@qq.com>"]}
+]}.

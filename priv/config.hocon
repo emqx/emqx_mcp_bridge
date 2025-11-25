@@ -1,0 +1,5 @@
+## Listening address for SSE connections
+listening_address = "https://0.0.0.0:9909/sse"
+
+## Load tools from MCP over MQTT servers
+load_tools_from_mcp_over_mqtt_servers = true

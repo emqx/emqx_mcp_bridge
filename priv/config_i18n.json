@@ -1,0 +1,22 @@
+{
+  "$listening_address_label": {
+    "zh": "监听地址",
+    "en": "Listening Address"
+  },
+  "$listening_address_desc": {
+    "zh": "用于接收SSE连接的地址。",
+    "en": "The address to listen for SSE connections."
+  },
+  "$listening_address_validate": {
+    "zh": "监听地址必须是一个有效的URL。",
+    "en": "The listening address must be a valid URL."
+  },
+  "$load_tools_from_mcp_over_mqtt_servers_label": {
+    "zh": "从 MCP over MQTT 服务端加载工具",
+    "en": "Load Tools from MCP over MQTT Servers"
+  },
+  "$load_tools_from_mcp_over_mqtt_servers_desc": {
+    "zh": "启用后，系统将通过 MCP over MQTT 服务端加载工具。",
+    "en": "When enabled, the system will load tools from MCP over MQTT servers."
+  }
+}
