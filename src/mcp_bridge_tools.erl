@@ -1,14 +1,17 @@
 -module(mcp_bridge_tools).
 
+-include("mcp_bridge.hrl").
+-include_lib("emqx_plugin_helper/include/emqx.hrl").
+
 -export([
     create_table/0,
-    save_tools/3,
-    get_tools/1
+    save_tools/2,
+    get_tools/1,
+    list_tools/0
 ]).
 
 -record(emqx_mcp_tool_registry, {
     tool_type,
-    mqtt_client_id,
     tools = []
 }).
 
@@ -26,13 +29,13 @@ create_table() ->
     ],
     ok = mria:create_table(?TAB, [
         {type, set},
-        {rlog_shard, ?MODULE},
+        {rlog_shard, ?COMMON_SHARD},
         {storage, Copies},
         {record_name, emqx_mcp_tool_registry},
         {attributes, record_info(fields, emqx_mcp_tool_registry)},
         {storage_properties, StoreProps}
     ]),
-    ok = mria_rlog:wait_for_shards([?MODULE], infinity),
+    ok = mria_rlog:wait_for_shards([?COMMON_SHARD], infinity),
     ok = mria:wait_for_tables([?TAB]),
     case mnesia:table_info(?TAB, storage_type) of
         Copies ->
@@ -42,23 +45,41 @@ create_table() ->
             ok
     end.
 
-save_tools(MqttClientId, ToolType, ToolsList) ->
+save_tools(ToolType, ToolsList) ->
     TaggedTools = [
-        ToolSchema#{<<"name">> => <<ToolType/binary, ":", Name/binary>>}
-        || #{<<"name">> := Name} = ToolSchema <- ToolsList
+        ToolSchema#{
+            <<"name">> => <<ToolType/binary, ":", Name/binary>>,
+            <<"inputSchema">> => InputSchema#{
+                <<"properties">> => Properties#{
+                    ?TARGET_CLIENTID_KEY => #{
+                        <<"type">> => <<"string">>,
+                        <<"description">> => <<"The target MQTT client ID to send the request to.">>
+                    }
+                }
+            }
+        }
+        || #{<<"name">> := Name, <<"inputSchema">> := #{<<"properties">> := Properties} = InputSchema} = ToolSchema <- ToolsList
     ],
     mria:dirty_write(?TAB,
         #emqx_mcp_tool_registry{
             tool_type = ToolType,
-            mqtt_client_id = MqttClientId,
             tools = TaggedTools
         }
     ).
 
 get_tools(ToolType) ->
     case mnesia:dirty_read(?TAB, ToolType) of
-        [#emqx_mcp_tool_registry{mqtt_client_id = MqttClientId, tools = TaggedTools}] ->
-            {ok, #{mqtt_client_id => MqttClientId, tools => TaggedTools}};
+        [#emqx_mcp_tool_registry{tools = TaggedTools}] ->
+            {ok, #{tools => TaggedTools}};
         [] ->
             {error, not_found}
     end.
+
+list_tools() ->
+    [TaggedTools || #emqx_mcp_tool_registry{tools = TaggedTools} <- ets:tab2list(?TAB)].
+
+% trans(Fun) ->
+%     case mria:transaction(?COMMON_SHARD, Fun) of
+%         {atomic, Res} -> {ok, Res};
+%         {aborted, Reason} -> {error, Reason}
+%     end.

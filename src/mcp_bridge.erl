@@ -166,7 +166,7 @@ on_message_puback(_PacketId, #message{} = Message, PubRes, RC) ->
     {ok, NewRC}.
 
 initialize_mcp_server(ServerInfo) ->
-    InitReq = mcp_bridge_message:initialize_request(?INIT_REQ_ID, ?BRIDGE_CLIENT_INFO, #{}),
+    InitReq = mcp_bridge_message:initialize_request(?INIT_REQ_ID, ?MCP_BRIDGE_INFO, #{}),
     Topic = mcp_bridge_message:get_topic(server_control, ServerInfo),
     InitReqMsg = mcp_bridge_message:make_mqtt_msg(Topic, InitReq, ?MCP_CLIENTID_B, #{}, 1),
     self() ! {deliver, Topic, InitReqMsg},
@@ -233,11 +233,11 @@ handle_mcp_response(MqttId, Result) ->
             ?SLOG(warning, #{msg => unknown_mcp_response_id, mqtt_id => MqttId})
     end.
 
-load_tools_from_result(ServerId, ServerName, #{<<"tools">> := ToolsList}) ->
-    mcp_bridge_tools:save_tools(ServerId, ServerName, ToolsList).
+load_tools_from_result(_ServerId, ServerName, #{<<"tools">> := ToolsList}) ->
+    mcp_bridge_tools:save_tools(ServerName, ToolsList).
 
-load_tools_from_register_msg(ServerId, ServerName, #{<<"meta">> := #{<<"tools">> := Tools}}) ->
-    mcp_bridge_tools:save_tools(ServerId, ServerName, Tools);
+load_tools_from_register_msg(_ServerId, ServerName, #{<<"meta">> := #{<<"tools">> := Tools}}) ->
+    mcp_bridge_tools:save_tools(ServerName, Tools);
 load_tools_from_register_msg(_ServerId, _ServerName, _Params) ->
     {error, no_tools}.
 
@@ -305,12 +305,23 @@ terminate(_Reason, _State) ->
 
 parse_config(#{<<"listening_address">> := URI} = Config) ->
     LoadMcpServers = maps:get(<<"load_tools_from_mcp_over_mqtt_servers">>, Config, true),
-    ListeningAddress = emqx_utils_uri:parse(URI),
+    ListeningAddress = #{authority := #{host := Host} = Authority} = emqx_utils_uri:parse(URI),
     #{
-        msg => "mcp_bridge_health_check",
-        listening_address => ListeningAddress,
+        get_target_clientid_from => maps:get(<<"get_target_clientid_from">>, Config, <<"http_headers">>),
+        listening_address => ListeningAddress#{
+            authority := Authority#{host := parse_address(Host)}
+        },
         load_tools_from_mcp_over_mqtt_servers => LoadMcpServers
     }.
+
+parse_address(Host) when is_binary(Host) ->
+    Host1 = binary_to_list(Host),
+    case inet_parse:address(Host1) of
+        {ok, IP} -> IP;
+        {error, _} ->
+            {ok, IP} = inet:getaddr(Host1, inet),
+            IP
+    end.
 
 split_id_and_server_name(Str) ->
     %% Split the server_id and server_name from the topic

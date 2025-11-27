@@ -18,9 +18,17 @@ init([]) ->
         type => worker,
         modules => [mcp_bridge]
     },
+    SessionChildSpec = #{
+        id => mcp_bridge_session,
+        start => {mcp_bridge_session, start_link, []},
+        restart => permanent,
+        shutdown => 5000,
+        type => worker,
+        modules => [mcp_bridge_session]
+    },
     SupFlags = #{
         strategy => one_for_all,
         intensity => 100,
         period => 10
     },
-    {ok, {SupFlags, [ConfigChildSpec]}}.
+    {ok, {SupFlags, [ConfigChildSpec, SessionChildSpec]}}.

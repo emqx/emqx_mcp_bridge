@@ -1,5 +1,15 @@
 ## Listening address for SSE connections
-listening_address = "https://0.0.0.0:9909/sse"
+listening_address = "http://0.0.0.0:9909/sse"
 
 ## Load tools from MCP over MQTT servers
 load_tools_from_mcp_over_mqtt_servers = true
+
+## Method to get target MQTT client ID when sending tools/call requests
+## Can be one of the following:
+##   - "tool_params": get from the parameters of the tools/call request
+##   - "http_headers": get from the HTTP headers of the incoming request
+##   - "jwt_claims": get from the JWT claims of the authenticated user
+get_target_clientid_from = "http_headers"
+
+## JWT secret for verifying JWT tokens in HTTP headers
+jwt_secret = "your_jwt_secret_here"

@@ -5,7 +5,7 @@
     {
       "name": "listening_address",
       "type": "string",
-      "default": "https://0.0.0.0:9909/sse",
+      "default": "http://0.0.0.0:9909/sse",
       "$ui": {
         "component": "input",
         "flex": 12,
@@ -30,6 +30,36 @@
         "flex": 12,
         "label": "$load_tools_from_mcp_over_mqtt_servers_label",
         "description": "$load_tools_from_mcp_over_mqtt_servers_desc"
+      }
+    },
+    {
+      "name": "get_target_clientid_from",
+      "type": {
+        "type": "enum",
+        "name": "get_target_clientid_from",
+        "symbols": [
+          "tool_params",
+          "http_headers",
+          "jwt_claims"
+        ]
+      },
+      "default": "http_headers",
+      "$ui": {
+        "component": "select",
+        "flex": 12,
+        "label": "$get_target_clientid_from_label",
+        "description": "$get_target_clientid_from_desc"
+      }
+    },
+    {
+      "name": "jwt_secret",
+      "type": "string",
+      "default": "",
+      "$ui": {
+        "component": "input",
+        "flex": 12,
+        "label": "$jwt_secret_label",
+        "description": "$jwt_secret_desc"
       }
     }
   ]

@@ -5,8 +5,17 @@
 
 -export([ initialize_request/2
         , initialize_request/3
+        , initialize_response/3
+        , initialize_response/4
         , initialized_notification/0
         , list_tools_request/1
+        ]).
+
+-export([ send_tools_call/5
+        , do_send_tools_call/4
+        , send_mcp_request/5
+        , list_tools/0
+        , list_tools/1
         ]).
 
 -export([ json_rpc_request/3
@@ -17,8 +26,6 @@
         , decode_rpc_msg/1
         , get_topic/2
         , make_mqtt_msg/5
-        , send_tools_call/3
-        , send_mcp_request/5
         , reply_caller/2
         , complete_mqtt_msg/2
         ]).
@@ -39,6 +46,21 @@ initialize_request(Id, ClientInfo, Capabilities) ->
             <<"capabilities">> => Capabilities
         }
     ).
+
+initialize_response(Id, ServerInfo, Capabilities) ->
+    json_rpc_response(Id, #{
+        <<"protocolVersion">> => ?MCP_VERSION,
+        <<"serverInfo">> => ServerInfo,
+        <<"capabilities">> => Capabilities
+    }).
+
+initialize_response(Id, ServerInfo, Capabilities, Instructions) ->
+    json_rpc_response(Id, #{
+        <<"protocolVersion">> => ?MCP_VERSION,
+        <<"serverInfo">> => ServerInfo,
+        <<"capabilities">> => Capabilities,
+        <<"instructions">> => Instructions
+    }).
 
 initialized_notification() ->
     json_rpc_notification(<<"notifications/initialized">>).
@@ -144,12 +166,46 @@ make_mqtt_msg(Topic, Payload, McpClientId, Flags, QoS) ->
     QoS = 1,
     emqx_message:make(McpClientId, QoS, Topic, Payload, Flags, Headers).
 
-send_tools_call(#{id := McpReqId, method := <<"tools/call">>, params := Params} = McpRequest, WaitResponse, Timeout) ->
+list_tools() ->
+    mcp_bridge_tools:list_tools().
+
+list_tools(ToolTypes) ->
+    lists:flatmap(
+        fun (ToolType) ->
+            case mcp_bridge_tools:get_tools(ToolType) of
+                {ok, #{tools := Tools}} ->
+                    Tools;
+                {error, not_found} ->
+                    []
+            end
+        end,
+        ToolTypes
+    ).
+
+send_tools_call(HttpHeaders, JwtClaims, #{method := <<"tools/call">>, params := Params} = McpRequest, WaitResponse, Timeout) ->
+    MqttClientId1 = 
+        case maps:get(?TARGET_CLIENTID_KEY, Params, undefined) of
+            undefined ->
+                case mcp_bridge:get_config() of
+                    #{get_target_clientid_from := <<"tool_params">>} ->
+                        throw(#{reason => invalid_tool_params, detail => <<?TARGET_CLIENTID_KEY_S" not found in tool params">>});
+                    #{get_target_clientid_from := <<"http_headers">>} ->
+                        maps:get(?TARGET_CLIENTID_KEY, HttpHeaders);
+                    #{get_target_clientid_from := <<"jwt_claims">>} ->
+                        maps:get(?TARGET_CLIENTID_KEY, JwtClaims)
+                end;
+            MqttClientId ->
+                MqttClientId
+        end,
+    do_send_tools_call(MqttClientId1, McpRequest, WaitResponse, Timeout).
+
+do_send_tools_call(MqttClientId, #{id := McpReqId, params := Params} = McpRequest, WaitResponse, Timeout) ->
     case string:split(maps:get(<<"name">>, Params, <<>>), ":") of
         [ToolType, ToolName] ->
             case mcp_bridge_tools:get_tools(ToolType) of
-                {ok, #{mqtt_client_id := MqttClientId}} ->
-                    McpRequest1 = McpRequest#{params := Params#{<<"name">> => ToolName}},
+                {ok, _} ->
+                    Params1 = maps:remove(?TARGET_CLIENTID_KEY, Params),
+                    McpRequest1 = McpRequest#{params := Params1#{<<"name">> => ToolName}},
                     Topic = get_topic(rpc, #{
                         mcp_clientid => ?MCP_CLIENTID_B,
                         server_id => MqttClientId,

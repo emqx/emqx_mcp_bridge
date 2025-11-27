@@ -18,5 +18,21 @@
   "$load_tools_from_mcp_over_mqtt_servers_desc": {
     "zh": "启用后，系统将通过 MCP over MQTT 服务端加载工具。",
     "en": "When enabled, the system will load tools from MCP over MQTT servers."
+  },
+  "$get_target_clientid_from_label": {
+    "zh": "获取目标 MQTT 客户端 ID 的方式",
+    "en": "Method to Get Target MQTT Client ID"
+  },
+  "$get_target_clientid_from_desc": {
+    "zh": "指定在发送工具调用请求时，如何获取目标 MQTT 客户端 ID。",
+    "en": "Specifies how to get the target MQTT client ID when sending tool call requests."
+  },
+  "$jwt_secret_label": {
+    "zh": "JWT 密钥",
+    "en": "JWT Secret"
+  },
+  "$jwt_secret_desc": {
+    "zh": "用于验证 HTTP 头中 JWT 令牌的密钥。",
+    "en": "The secret key used to verify JWT tokens in HTTP headers."
   }
 }
