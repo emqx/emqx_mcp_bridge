@@ -23,11 +23,11 @@ start(_StartType, _StartArgs) ->
     mcp_bridge:hook(),
     mcp_bridge_tools:create_table(),
     emqx_ctl:register_command(mcp_bridge, {mcp_bridge_cli, cmd}),
-    start_listener(),
+    {ok, _} = start_listener(),
     {ok, Sup}.
 
 stop(_State) ->
-    stop_listener(),
+    _ = stop_listener(),
     emqx_ctl:unregister_command(mcp_bridge),
     mcp_bridge:unhook().
 
@@ -52,7 +52,7 @@ start_listener() ->
     Middlewares = [mcp_bridge_http_auth, cowboy_router, cowboy_handler],
     case Scheme of
         <<"http">> ->
-            {ok, _} = cowboy:start_clear(mcp_bridge_http_listener,
+            cowboy:start_clear(mcp_bridge_http_listener,
                 [{port, Port}, {ip, Host}],
                 #{env => #{dispatch => Dispatch}, middlewares => Middlewares}
             );
@@ -61,13 +61,12 @@ start_listener() ->
                 {certfile, Certfile},
                 {keyfile, Keyfile}
             ],
-            {ok, _} = cowboy:start_tls(mcp_bridge_http_listener,
+            cowboy:start_tls(mcp_bridge_http_listener,
                 [{port, Port}, {ip, Host}] ++ SSLOptions,
                 #{env => #{dispatch => Dispatch}, middlewares => Middlewares}
             );
-        _ -> error
-    end,
-    ok.
+        _ -> {error, {invalid_scheme, Scheme}}
+    end.
 
 stop_listener() ->
     cowboy:stop_listener(mcp_bridge_http_listener).
