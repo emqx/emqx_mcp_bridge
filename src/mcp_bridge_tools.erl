@@ -49,16 +49,8 @@ save_tools(ToolType, ToolsList) ->
     TaggedTools = [
         ToolSchema#{
             <<"name">> => <<ToolType/binary, ":", Name/binary>>,
-            <<"inputSchema">> => InputSchema#{
-                <<"properties">> => Properties#{
-                    ?TARGET_CLIENTID_KEY => #{
-                        <<"type">> => <<"string">>,
-                        <<"description">> => <<"The target MQTT client ID to send the request to.">>
-                    }
-                }
-            }
-        }
-        || #{<<"name">> := Name, <<"inputSchema">> := #{<<"properties">> := Properties} = InputSchema} = ToolSchema <- ToolsList
+            <<"inputSchema">> => maybe_add_target_client_param(InputSchema)
+        } || #{<<"name">> := Name, <<"inputSchema">> := InputSchema} = ToolSchema <- ToolsList
     ],
     mria:dirty_write(?TAB,
         #emqx_mcp_tool_registry{
@@ -66,6 +58,21 @@ save_tools(ToolType, ToolsList) ->
             tools = TaggedTools
         }
     ).
+
+maybe_add_target_client_param(#{<<"properties">> := Properties} = InputSchema) ->
+    case mcp_bridge:get_config() of
+        #{get_target_clientid_from := <<"tool_params">>} ->
+            InputSchema#{
+                <<"properties">> => Properties#{
+                    ?TARGET_CLIENTID_KEY => #{
+                        <<"type">> => <<"string">>,
+                        <<"description">> => <<"The target MQTT client ID to send the request to.">>
+                    }
+                }
+            };
+        _ ->
+            InputSchema
+    end.
 
 get_tools(ToolType) ->
     case mnesia:dirty_read(?TAB, ToolType) of

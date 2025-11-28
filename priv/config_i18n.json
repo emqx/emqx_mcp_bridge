@@ -19,6 +19,18 @@
     "zh": "指定在发送工具调用请求时，如何获取目标 MQTT 客户端 ID。",
     "en": "Specifies how to get the target MQTT client ID when sending tool call requests."
   },
+  "$tool_params_option": {
+    "zh": "工具参数",
+    "en": "Tool Parameters"
+  },
+  "$http_headers_option": {
+    "zh": "HTTP 头",
+    "en": "HTTP Headers"
+  },
+  "$jwt_claims_option": {
+    "zh": "JWT 声明",
+    "en": "JWT Claims"
+  },
   "$jwt_secret_label": {
     "zh": "JWT 密钥",
     "en": "JWT Secret"

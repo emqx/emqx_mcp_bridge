@@ -44,7 +44,7 @@ start_listener() ->
                 <<"/sse">> ->
                     mcp_bridge_sse_handler:path_specs();
                 _ ->
-                    mcp_bridge_sse_handler:path_specs() ++ mcp_bridge_http_handler:path_specs()
+                    mcp_bridge_sse_handler:path_specs() ++ mcp_bridge_http_handler:path_specs(Path)
             end,
     Dispatch = cowboy_router:compile([
         {'_', Paths}

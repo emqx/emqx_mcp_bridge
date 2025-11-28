@@ -25,8 +25,8 @@ When an MCP Server using the MCP over MQTT protocol connects to EMQX, the plugin
 After loading tools from the MCP Server, the plugin transforms the tool list as follows:
 
 - It adds the tool type prefix to each tool name, resulting in the format "ToolType:ToolName". This avoids tool name conflicts across different MCP Servers and allows MCP-HTTP clients to filter tools by type.
-- If `get_target_clientid_from` is set to "tool_params", MCP bridge injects a parameter named "target-mqtt-client-id" into each tool. MCP-HTTP clients must provide this parameter when invoking the tool, and the plugin uses its value to send the tool invocation request to the specified MQTT MCP Server.
-- If `get_target_clientid_from` is set to "http_headers" or "jwt_claims", MCP-HTTP clients do not need to provide the "target-mqtt-client-id" parameter. Instead, the plugin obtains the target MQTT Client ID from the HTTP headers or JWT claims. This method is suitable only when there is a one-to-one mapping between MCP-HTTP clients and MQTT MCP Servers, i.e., each MCP-HTTP client accesses tools on a single MQTT MCP Server.
+- If `get_target_clientid_from` is set to "tool_params", MCP bridge injects a parameter named `target-mqtt-client-id` into each tool. MCP-HTTP clients must provide this parameter when invoking the tool, and the plugin uses its value to send the tool invocation request to the specified MQTT MCP Server.
+- If `get_target_clientid_from` is set to "http_headers" or "jwt_claims", MCP-HTTP clients do not need to provide the `target-mqtt-client-id` parameter. Instead, the plugin obtains the target MQTT Client ID from the HTTP headers or JWT claims. This method is suitable only when there is a one-to-one mapping between MCP-HTTP clients and MQTT MCP Servers, i.e., each MCP-HTTP client accesses tools on a single MQTT MCP Server.
 
 ## Deployment
 

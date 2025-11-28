@@ -35,6 +35,20 @@
       "default": "http_headers",
       "$ui": {
         "component": "select",
+        "options": [
+          {
+            "label": "$tool_params_option",
+            "value": "tool_params"
+          },
+          {
+            "label": "$http_headers_option",
+            "value": "http_headers"
+          },
+          {
+            "label": "$jwt_claims_option",
+            "value": "jwt_claims"
+          }
+        ],
         "flex": 12,
         "label": "$get_target_clientid_from_label",
         "description": "$get_target_clientid_from_desc"
