@@ -47,11 +47,16 @@ handle_method(<<"POST">>, <<"/sse/", SessionId/binary>>, Req, State) ->
             ?SLOG(warning, #{msg => session_not_found, tag => ?MODULE, session_id => SessionId}),
             Req2 = cowboy_req:reply(404, #{}, <<"Session Not Found">>, Req1),
             {ok, Req2, State}
-    end.
+    end;
+handle_method(UnsupportedMethod, _Path, Req0, State) ->
+    ?SLOG(warning, #{msg => unsupported_http_method, tag => ?MODULE, method => UnsupportedMethod}),
+    Req = cowboy_req:reply(405, #{}, <<"Method Not Allowed">>, Req0),
+    {ok, Req, State}.
 
 info({mcp_message, Message}, Req, State) ->
-    case handle_message(Message, Req, State) of
-        {undefined, NState} ->
+    case mcp_bridge_http_helper:handle_message(Message, Req, State) of
+        {unsupported, NState} ->
+            ?SLOG(warning, #{msg => ignoring_rpc_message, tag => ?MODULE, rpc_message => Message}),
             {ok, Req, NState};
         {Response, NState} ->
             Event = #{
@@ -64,24 +69,3 @@ info({mcp_message, Message}, Req, State) ->
 info(_Info, Req, State) ->
     ?SLOG(warning, #{msg => received_unexpected_info, tag => ?MODULE, info => _Info}),
     {ok, Req, State}.
-
-handle_message(Message, Req, State) ->
-    case mcp_bridge_message:decode_rpc_msg(Message) of
-        {ok, #{type := json_rpc_request, method := <<"tools/call">>} = RpcMsg} ->
-            Headers = cowboy_req:headers(Req),
-            JwtClaims = maps:get(jwt_claims, Req, #{}),
-            Response = mcp_bridge_message:send_tools_call(Headers, JwtClaims, RpcMsg, true, 3_000),
-            {Response, State};
-        {ok, #{type := json_rpc_request, method := <<"initialize">>, id := Id}} ->
-            Response = mcp_bridge_message:initialize_response(Id, ?MCP_BRIDGE_INFO, #{}),
-            {Response, State};
-        {ok, #{type := _} = RpcMsg} ->
-            %% Ignore responses, notifications, and errors from MCP client
-            ?SLOG(warning, #{msg => ignoring_rpc_message, tag => ?MODULE, rpc_message => RpcMsg}),
-            {undefined, State};
-        {error, Reason} ->
-            ?SLOG(error, #{
-                msg => invalid_rpc_message, tag => ?MODULE, reason => Reason, message => Message
-            }),
-            {mcp_bridge_message:json_rpc_error(-1, -32600, <<"Invalid JSON">>, #{}), State}
-    end.

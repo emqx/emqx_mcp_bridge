@@ -19,6 +19,12 @@
 ]).
 
 -export([
+    start_listener/0,
+    stop_listener/0,
+    restart_listener/0
+]).
+
+-export([
     on_config_changed/2,
     on_health_check/1,
     get_config/0
@@ -142,8 +148,8 @@ on_message_publish(
                 msg => received_response, server_id => ServerId, server_name => ServerName
             }),
             handle_mcp_response(Id, Result);
-        {ok, _Msg} ->
-            ok;
+        {ok, Msg} ->
+            ?SLOG(warning, #{msg => unsupported_rpc_message_received, rpc_msg => Msg});
         {error, Reason} ->
             ?SLOG(error, #{msg => decode_rpc_msg_failed, reason => Reason})
     end,
@@ -279,8 +285,56 @@ on_health_check(_Options) ->
 %% @doc
 %% - Return `{error, Error}' if the new config is invalid.
 %% - Return `ok' if the config is valid and can be accepted.
-on_config_changed(_OldConfig, NewConfig) ->
-    persistent_term:put(?MODULE, parse_config(NewConfig)).
+on_config_changed(OldConfig, NewConfig) ->
+    persistent_term:put(?MODULE, parse_config(NewConfig)),
+    gen_server:cast(?MODULE, {on_changed, OldConfig, NewConfig}).
+
+%%--------------------------------------------------------------------
+%% Listeners
+%%--------------------------------------------------------------------
+
+restart_listener() ->
+    _ = stop_listener(),
+    start_listener().
+
+start_listener() ->
+    #{listening_address := ListeningAddress, certfile := Certfile, keyfile := Keyfile} = mcp_bridge:get_config(),
+    #{scheme := Scheme, path := Path, authority := #{port := Port, host := Host}} =
+        ListeningAddress,
+    Paths =
+        case Path of
+            <<"/sse">> ->
+                mcp_bridge_sse_handler:path_specs();
+            _ ->
+                mcp_bridge_sse_handler:path_specs() ++ mcp_bridge_http_handler:path_specs(Path)
+        end,
+    Dispatch = cowboy_router:compile([
+        {'_', Paths}
+    ]),
+    Middlewares = [mcp_bridge_http_auth, cowboy_router, cowboy_handler],
+    case Scheme of
+        <<"http">> ->
+            cowboy:start_clear(
+                mcp_bridge_http_listener,
+                [{port, Port}, {ip, Host}],
+                #{env => #{dispatch => Dispatch}, middlewares => Middlewares}
+            );
+        <<"https">> ->
+            SSLOptions = [
+                {certfile, Certfile},
+                {keyfile, Keyfile}
+            ],
+            cowboy:start_tls(
+                mcp_bridge_http_listener,
+                [{port, Port}, {ip, Host}] ++ SSLOptions,
+                #{env => #{dispatch => Dispatch}, middlewares => Middlewares}
+            );
+        _ ->
+            {error, {invalid_scheme, Scheme}}
+    end.
+
+stop_listener() ->
+    cowboy:stop_listener(mcp_bridge_http_listener).
 
 %%--------------------------------------------------------------------
 %% Working with config
@@ -310,10 +364,16 @@ init([]) ->
 handle_call(_Request, _From, State) ->
     {reply, ok, State}.
 
-handle_cast({on_changed, _Config}, State) ->
-    %% NOTE
-    %% additionally handling of the config change here, i.e
-    %% reestablish the connection to the database in case of host change, etc.
+handle_cast({on_changed, OldConfig, NewConfig}, State) ->
+    case need_restart_listener(OldConfig, NewConfig) of
+        true ->
+            _ = restart_listener(),
+            ?SLOG(warning, #{
+                msg => mcp_bridge_listener_restarted_due_to_config_change, tag => ?MODULE
+            });
+        false ->
+            ok
+    end,
     {noreply, State};
 handle_cast(_Request, State) ->
     {noreply, State}.
@@ -324,6 +384,16 @@ handle_info(_Request, State) ->
 terminate(_Reason, _State) ->
     persistent_term:erase(?MODULE),
     ok.
+
+need_restart_listener(OldConfig, NewConfig) when is_map(OldConfig), is_map(NewConfig) ->
+    %% find out the different keys that may affect the listener
+    KeysToCheck = [<<"listening_address">>, <<"certfile">>, <<"keyfile">>],
+    lists:any(
+        fun(Key) ->
+            maps:get(Key, OldConfig, undefined) =/= maps:get(Key, NewConfig, undefined)
+        end,
+        KeysToCheck
+    ).
 
 parse_config(#{<<"listening_address">> := URI} = Config) ->
     ListeningAddress = #{authority := #{host := Host} = Authority} = emqx_utils_uri:parse(URI),

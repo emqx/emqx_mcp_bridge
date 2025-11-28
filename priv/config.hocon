@@ -1,7 +1,7 @@
 ## Listening address for SSE connections. If you only want to support the old SSE MCP clients,
 ## you can set the path to "/sse", e.g. "http://0.0.0.0:9909/sse", otherwise the MCP bridge will
 ## start 2 endpoints: "/sse" for old SSE MCP clients and "/your-path" for streamable MCP clients.
-listening_address = "http://0.0.0.0:9909/streamable"
+listening_address = "http://0.0.0.0:9909/mcp"
 
 ## Method to get target MQTT client ID when sending tools/call requests
 ## Can be one of the following:

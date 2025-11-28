@@ -8,10 +8,10 @@ This plugin allows HTTP MCP clients to communicate with MCP-over-MQTT clients by
 
 ## Configuration
 
-The listening_address parameter in the configuration file specifies the address and path the plugin listens on. The plugin supports both the old SSE MCP clients and the new streamable MCP clients. To only support the old SSE MCP clients, set the path to `/sse`.
+The listening_address parameter in the configuration file specifies the address and path the plugin listens on. The plugin supports both the old SSE MCP clients and the new streamable MCP clients. To only support the old SSE MCP clients, change the path to `/sse`.
 
 ```hocon
-listening_address = "http://0.0.0.0:9998/streamable"
+listening_address = "http://0.0.0.0:9998/mcp"
 ```
 
 ## How does it work
