@@ -304,14 +304,12 @@ terminate(_Reason, _State) ->
     ok.
 
 parse_config(#{<<"listening_address">> := URI} = Config) ->
-    LoadMcpServers = maps:get(<<"load_tools_from_mcp_over_mqtt_servers">>, Config, true),
     ListeningAddress = #{authority := #{host := Host} = Authority} = emqx_utils_uri:parse(URI),
     #{
         get_target_clientid_from => maps:get(<<"get_target_clientid_from">>, Config, <<"http_headers">>),
         listening_address => ListeningAddress#{
             authority := Authority#{host := parse_address(Host)}
         },
-        load_tools_from_mcp_over_mqtt_servers => LoadMcpServers,
         jwt_secret => maps:get(<<"jwt_secret">>, Config, <<"">>),
         certfile => maps:get(<<"certfile">>, Config, <<"">>),
         keyfile => maps:get(<<"keyfile">>, Config, <<"">>)

@@ -22,17 +22,6 @@
       }
     },
     {
-      "name": "load_tools_from_mcp_over_mqtt_servers",
-      "type": "boolean",
-      "default": true,
-      "$ui": {
-        "component": "switch",
-        "flex": 12,
-        "label": "$load_tools_from_mcp_over_mqtt_servers_label",
-        "description": "$load_tools_from_mcp_over_mqtt_servers_desc"
-      }
-    },
-    {
       "name": "get_target_clientid_from",
       "type": {
         "type": "enum",
