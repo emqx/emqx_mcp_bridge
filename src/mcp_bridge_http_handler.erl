@@ -26,6 +26,8 @@ handle_method(<<"POST">>, _Path, Req0, State) ->
     {ok, Body, Req} = cowboy_req:read_body(Req0),
     ?SLOG(debug, #{msg => received_http_post, tag => ?MODULE, body => Body}),
     case mcp_bridge_http_helper:handle_message(Body, Req, State) of
+        {no_response, NState} ->
+            {ok, Req, NState};
         {unsupported, NState} ->
             ?SLOG(warning, #{msg => unsupported_rpc_msg, tag => ?MODULE, rpc_message => Body}),
             Req1 = cowboy_req:reply(501, #{}, <<"Unsupported RPC message">>, Req),

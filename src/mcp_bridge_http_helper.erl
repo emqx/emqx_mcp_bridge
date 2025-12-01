@@ -20,8 +20,14 @@ handle_message(Message, Req, State) ->
             Response = mcp_bridge_message:send_tools_call(Headers, JwtClaims, RpcMsg, true, 3_000),
             {Response, State};
         {ok, #{type := json_rpc_request, method := <<"initialize">>, id := Id}} ->
-            Response = mcp_bridge_message:initialize_response(Id, ?MCP_BRIDGE_INFO, #{}),
+            Response = mcp_bridge_message:initialize_response(Id, ?MCP_BRIDGE_INFO, #{
+                <<"tools">> => #{
+                    <<"listChanged">> => true
+                }
+            }),
             {Response, State};
+        {ok, #{type := json_rpc_notification, method := <<"notifications/initialized">>}} ->
+            {no_response, State};
         {ok, #{type := _}} ->
             {unsupported, State};
         {error, Reason} ->

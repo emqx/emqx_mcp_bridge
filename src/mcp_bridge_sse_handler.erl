@@ -56,6 +56,8 @@ handle_method(UnsupportedMethod, _Path, Req0, State) ->
 
 info({mcp_message, Message}, Req, State) ->
     case mcp_bridge_http_helper:handle_message(Message, Req, State) of
+        {no_response, NState} ->
+            {ok, Req, NState};
         {unsupported, NState} ->
             ?SLOG(warning, #{msg => ignoring_rpc_message, tag => ?MODULE, rpc_message => Message}),
             {ok, Req, NState};
