@@ -211,27 +211,24 @@ get_tools_types(Headers, JwtClaims) ->
             end
     end.
 
-get_target_clientid(HttpHeaders, JwtClaims, Params) ->
-    case maps:get(?TARGET_CLIENTID_KEY, Params, undefined) of
-        undefined ->
-            case mcp_bridge:get_config() of
-                #{get_target_clientid_from := <<"tool_params">>} ->
-                    {error, <<?TARGET_CLIENTID_KEY_S " not found in tool params">>};
-                #{get_target_clientid_from := <<"http_headers">>} ->
-                    maps:get(
-                        ?TARGET_CLIENTID_KEY,
-                        HttpHeaders,
-                        {error, <<?TARGET_CLIENTID_KEY_S " not found in http headers">>}
-                    );
-                #{get_target_clientid_from := <<"jwt_claims">>} ->
-                    maps:get(
-                        ?TARGET_CLIENTID_KEY,
-                        JwtClaims,
-                        {error, <<?TARGET_CLIENTID_KEY_S " not found in jwt claims">>}
-                    )
-            end;
-        MqttClientId ->
-            MqttClientId
+get_target_clientid(_, _, #{<<"arguments">> := #{?TARGET_CLIENTID_KEY := MqttClientId}}) ->
+    MqttClientId;
+get_target_clientid(HttpHeaders, JwtClaims, _Params) ->
+    case mcp_bridge:get_config() of
+        #{get_target_clientid_from := <<"tool_params">>} ->
+            {error, <<?TARGET_CLIENTID_KEY_S " not found in tool params">>};
+        #{get_target_clientid_from := <<"http_headers">>} ->
+            maps:get(
+                ?TARGET_CLIENTID_KEY,
+                HttpHeaders,
+                {error, <<?TARGET_CLIENTID_KEY_S " not found in http headers">>}
+            );
+        #{get_target_clientid_from := <<"jwt_claims">>} ->
+            maps:get(
+                ?TARGET_CLIENTID_KEY,
+                JwtClaims,
+                {error, <<?TARGET_CLIENTID_KEY_S " not found in jwt claims">>}
+            )
     end.
 
 do_send_tools_call(MqttClientId, #{params := Params} = McpRequest, WaitResponse, Timeout) ->
