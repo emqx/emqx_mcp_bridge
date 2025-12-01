@@ -11,3 +11,5 @@
 -define(MCP_CLIENTID_B, <<"emqx_mcp_bridge">>).
 -define(TARGET_CLIENTID_KEY_S, "target-mqtt-client-id").
 -define(TARGET_CLIENTID_KEY, <<?TARGET_CLIENTID_KEY_S>>).
+-define(TOOL_TYPES_KEY_S, "tool-types").
+-define(TOOL_TYPES_KEY, <<?TOOL_TYPES_KEY_S>>).

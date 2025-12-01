@@ -298,7 +298,8 @@ restart_listener() ->
     start_listener().
 
 start_listener() ->
-    #{listening_address := ListeningAddress, certfile := Certfile, keyfile := Keyfile} = mcp_bridge:get_config(),
+    #{listening_address := ListeningAddress, certfile := Certfile, keyfile := Keyfile} =
+        mcp_bridge:get_config(),
     #{scheme := Scheme, path := Path, authority := #{port := Port, host := Host}} =
         ListeningAddress,
     Paths =
@@ -400,6 +401,9 @@ parse_config(#{<<"listening_address">> := URI} = Config) ->
     #{
         get_target_clientid_from => maps:get(
             <<"get_target_clientid_from">>, Config, <<"http_headers">>
+        ),
+        get_tool_types_from => maps:get(
+            <<"get_tool_types_from">>, Config, <<"http_headers">>
         ),
         listening_address => ListeningAddress#{
             authority := Authority#{host := parse_address(Host)}

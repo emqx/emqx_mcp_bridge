@@ -25,7 +25,9 @@ init(Req, State) ->
 
 handle_method(<<"GET">>, <<"/sse">>, Req0, State) ->
     SessionId = binary:encode_hex(crypto:strong_rand_bytes(16)),
-    %% When a client connects, the server MUST send an endpoint event containing a URI for the client to use for sending messages. All subsequent client messages MUST be sent as HTTP POST requests to this endpoint.
+    %% When a client connects, the server MUST send an endpoint event containing
+    %% a URI for the client to use for sending messages. All subsequent client
+    %% messages MUST be sent as HTTP POST requests to this endpoint.
     EndpointEvent = #{
         event => <<"endpoint">>,
         data => <<"/sse/", SessionId/binary>>
@@ -36,8 +38,7 @@ handle_method(<<"GET">>, <<"/sse">>, Req0, State) ->
     {cowboy_loop, Req, State};
 handle_method(<<"POST">>, <<"/sse/", SessionId/binary>>, Req, State) ->
     {ok, Body, Req1} = cowboy_req:read_body(Req),
-    %% Process the message body as needed
-    ?SLOG(debug, #{msg => received_sse_post, tag => ?MODULE, session_id => SessionId, body => Body}),
+    ?SLOG(debug, #{msg => sse_post, tag => ?MODULE, session_id => SessionId, body => Body}),
     %% Quick reply with 202 Accepted, and dispatch the message to the session handler
     case mcp_bridge_session:dispatch_message(SessionId, Body) of
         ok ->

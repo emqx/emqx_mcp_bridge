@@ -9,6 +9,11 @@
 
 handle_message(Message, Req, State) ->
     case mcp_bridge_message:decode_rpc_msg(Message) of
+        {ok, #{type := json_rpc_request, method := <<"tools/list">>, id := McpReqId}} ->
+            Headers = cowboy_req:headers(Req),
+            JwtClaims = maps:get(jwt_claims, Req, #{}),
+            Response = mcp_bridge_message:get_tools_list(Headers, JwtClaims, McpReqId),
+            {Response, State};
         {ok, #{type := json_rpc_request, method := <<"tools/call">>} = RpcMsg} ->
             Headers = cowboy_req:headers(Req),
             JwtClaims = maps:get(jwt_claims, Req, #{}),

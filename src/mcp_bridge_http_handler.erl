@@ -18,7 +18,8 @@ init(Req, State) ->
     handle_method(Method, Path, Req, State).
 
 handle_method(<<"GET">>, _Path, Req0, State) ->
-    %% Return HTTP 405 Method Not Allowed, indicating that the server does not offer an SSE stream at this endpoint.
+    %% Return HTTP 405 Method Not Allowed, indicating that the server does not
+    %% offer an SSE stream at this endpoint.
     Req = cowboy_req:reply(405, #{}, <<"SSE not supported">>, Req0),
     {ok, Req, State};
 handle_method(<<"POST">>, _Path, Req0, State) ->

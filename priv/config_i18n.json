@@ -19,6 +19,14 @@
     "zh": "指定在发送工具调用请求时，如何获取目标 MQTT 客户端 ID。",
     "en": "Specifies how to get the target MQTT client ID when sending tool call requests."
   },
+  "$get_tool_types_from_label": {
+    "zh": "获取工具类型的方式",
+    "en": "Method to Get Tool Types"
+  },
+  "$get_tool_types_from_desc": {
+    "zh": "指定在列出工具时，如何获取工具类型。",
+    "en": "Specifies how to get the tool types when listing tools."
+  },
   "$tool_params_option": {
     "zh": "工具参数",
     "en": "Tool Parameters"

@@ -13,11 +13,10 @@
 ]).
 
 -export([
+    get_tools_list/3,
     send_tools_call/5,
     do_send_tools_call/4,
-    send_mcp_request/5,
-    list_tools/0,
-    list_tools/1
+    send_mcp_request/5
 ]).
 
 -export([
@@ -119,21 +118,16 @@ json_rpc_error(Id, Code, Message, Data) ->
 
 decode_rpc_msg(Msg) ->
     try emqx_utils_json:decode(Msg) of
-        #{
-            <<"jsonrpc">> := <<"2.0">>,
-            <<"method">> := Method,
-            <<"params">> := Params,
-            <<"id">> := Id
-        } ->
+        #{<<"jsonrpc">> := <<"2.0">>, <<"method">> := Method, <<"id">> := Id} = RpcMsg ->
+            Params = maps:get(<<"params">>, RpcMsg, #{}),
             {ok, #{type => json_rpc_request, method => Method, id => Id, params => Params}};
         #{<<"jsonrpc">> := <<"2.0">>, <<"result">> := Result, <<"id">> := Id} ->
             {ok, #{type => json_rpc_response, id => Id, result => Result}};
         #{<<"jsonrpc">> := <<"2.0">>, <<"error">> := Error, <<"id">> := Id} ->
             {ok, #{type => json_rpc_error, id => Id, error => Error}};
-        #{<<"jsonrpc">> := <<"2.0">>, <<"method">> := Method, <<"params">> := Params} ->
+        #{<<"jsonrpc">> := <<"2.0">>, <<"method">> := Method} = RpcMsg ->
+            Params = maps:get(<<"params">>, RpcMsg, #{}),
             {ok, #{type => json_rpc_notification, method => Method, params => Params}};
-        #{<<"jsonrpc">> := <<"2.0">>, <<"method">> := Method} ->
-            {ok, #{type => json_rpc_notification, method => Method}};
         Msg1 ->
             {error, #{reason => malformed_json_rpc, msg => Msg1}}
     catch
@@ -169,21 +163,13 @@ make_mqtt_msg(Topic, Payload, McpClientId, Flags, QoS) ->
     QoS = 1,
     emqx_message:make(McpClientId, QoS, Topic, Payload, Flags, Headers).
 
-list_tools() ->
-    mcp_bridge_tools:list_tools().
-
-list_tools(ToolTypes) ->
-    lists:flatmap(
-        fun(ToolType) ->
-            case mcp_bridge_tools:get_tools(ToolType) of
-                {ok, #{tools := Tools}} ->
-                    Tools;
-                {error, not_found} ->
-                    []
-            end
-        end,
-        ToolTypes
-    ).
+get_tools_list(Headers, JwtClaims, McpReqId) ->
+    case get_tools_types(Headers, JwtClaims) of
+        {ok, ToolTypes} ->
+            list_tools_result(mcp_bridge_tools:list_tools(ToolTypes), McpReqId);
+        {error, _} ->
+            list_tools_result(mcp_bridge_tools:list_tools(), McpReqId)
+    end.
 
 send_tools_call(
     HttpHeaders,
@@ -198,6 +184,31 @@ send_tools_call(
         MqttClientId ->
             Result = do_send_tools_call(MqttClientId, McpRequest, WaitResponse, Timeout),
             call_tool_result(Result, McpReqId)
+    end.
+
+get_tools_types(Headers, JwtClaims) ->
+    case mcp_bridge:get_config() of
+        #{get_tool_types_from := <<"http_headers">>} ->
+            case maps:get(?TOOL_TYPES_KEY, Headers, undefined) of
+                undefined ->
+                    {error, not_found};
+                ToolTypes ->
+                    case string:lexemes(ToolTypes, ", ") of
+                        [] ->
+                            {error, no_tool_types_specified};
+                        TypesList ->
+                            {ok, TypesList}
+                    end
+            end;
+        #{get_tool_types_from := <<"jwt_claims">>} ->
+            case maps:get(?TOOL_TYPES_KEY, JwtClaims, undefined) of
+                undefined ->
+                    {error, not_found};
+                ToolTypes when is_list(ToolTypes) ->
+                    {ok, ToolTypes};
+                _Other ->
+                    {error, invalid_tool_types_format}
+            end
     end.
 
 get_target_clientid(HttpHeaders, JwtClaims, Params) ->
@@ -275,6 +286,11 @@ send_mcp_request(MqttClientId, Topic, McpRequest, WaitResponse, Timeout) ->
 reply_caller(#{caller := Caller, monitor_ref := Mref}, Reply) ->
     Caller ! {mcp_response, Mref, Reply},
     ok.
+
+list_tools_result(Tools, McpReqId) ->
+    json_rpc_response(McpReqId, #{
+        tools => Tools
+    }).
 
 call_tool_result({ok, Reply}, McpReqId) when is_atom(Reply) ->
     json_rpc_response(McpReqId, #{

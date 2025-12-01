@@ -55,6 +55,34 @@
       }
     },
     {
+      "name": "get_tool_types_from",
+      "type": {
+        "type": "enum",
+        "name": "get_tool_types_from",
+        "symbols": [
+          "http_headers",
+          "jwt_claims"
+        ]
+      },
+      "default": "http_headers",
+      "$ui": {
+        "component": "select",
+        "options": [
+          {
+            "label": "$http_headers_option",
+            "value": "http_headers"
+          },
+          {
+            "label": "$jwt_claims_option",
+            "value": "jwt_claims"
+          }
+        ],
+        "flex": 12,
+        "label": "$get_tool_types_from_label",
+        "description": "$get_tool_types_from_desc"
+      }
+    },
+    {
       "name": "jwt_secret",
       "type": "string",
       "default": "",

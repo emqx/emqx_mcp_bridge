@@ -7,7 +7,8 @@
     create_table/0,
     save_tools/2,
     get_tools/1,
-    list_tools/0
+    list_tools/0,
+    list_tools/1
 ]).
 
 -record(emqx_mcp_tool_registry, {
@@ -48,10 +49,9 @@ create_table() ->
 save_tools(ToolType, ToolsList) ->
     TaggedTools = [
         ToolSchema#{
-            <<"name">> => <<ToolType/binary, ":", Name/binary>>,
-            <<"inputSchema">> => maybe_add_target_client_param(InputSchema)
+            <<"name">> => <<ToolType/binary, ":", Name/binary>>
         }
-     || #{<<"name">> := Name, <<"inputSchema">> := InputSchema} = ToolSchema <- ToolsList
+     || #{<<"name">> := Name} = ToolSchema <- ToolsList
     ],
     mria:dirty_write(
         ?TAB,
@@ -60,6 +60,14 @@ save_tools(ToolType, ToolsList) ->
             tools = TaggedTools
         }
     ).
+
+inject_target_client_params(Tools) ->
+    [
+        ToolSchema#{
+            <<"inputSchema">> => maybe_add_target_client_param(InputSchema)
+        }
+     || #{<<"inputSchema">> := InputSchema} = ToolSchema <- Tools
+    ].
 
 maybe_add_target_client_param(#{<<"properties">> := Properties} = InputSchema) ->
     case mcp_bridge:get_config() of
@@ -78,14 +86,30 @@ maybe_add_target_client_param(#{<<"properties">> := Properties} = InputSchema) -
 
 get_tools(ToolType) ->
     case mnesia:dirty_read(?TAB, ToolType) of
-        [#emqx_mcp_tool_registry{tools = TaggedTools}] ->
-            {ok, #{tools => TaggedTools}};
+        [#emqx_mcp_tool_registry{tools = Tools}] ->
+            {ok, #{tools => inject_target_client_params(Tools)}};
         [] ->
             {error, not_found}
     end.
 
 list_tools() ->
-    [TaggedTools || #emqx_mcp_tool_registry{tools = TaggedTools} <- ets:tab2list(?TAB)].
+    lists:flatten([
+        inject_target_client_params(Tools)
+     || #emqx_mcp_tool_registry{tools = Tools} <- ets:tab2list(?TAB)
+    ]).
+
+list_tools(ToolTypes) ->
+    lists:flatmap(
+        fun(ToolType) ->
+            case get_tools(ToolType) of
+                {ok, #{tools := Tools}} ->
+                    Tools;
+                {error, not_found} ->
+                    []
+            end
+        end,
+        ToolTypes
+    ).
 
 % trans(Fun) ->
 %     case mria:transaction(?COMMON_SHARD, Fun) of

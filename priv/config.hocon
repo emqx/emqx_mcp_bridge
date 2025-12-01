@@ -10,6 +10,12 @@ listening_address = "http://0.0.0.0:9909/mcp"
 ##   - "jwt_claims": get from the JWT claims of the authenticated user
 get_target_clientid_from = "http_headers"
 
+## Method to get tool types when listing tools
+## Can be one of the following:
+##   - "http_headers": get from the HTTP headers of the incoming request
+##   - "jwt_claims": get from the JWT claims of the authenticated user
+get_tool_types_from = "http_headers"
+
 ## JWT secret for verifying JWT tokens in HTTP headers
 jwt_secret = "your_jwt_secret_here"
 
