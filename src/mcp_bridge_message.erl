@@ -2,6 +2,7 @@
 
 -include("mcp_bridge.hrl").
 -include_lib("emqx_plugin_helper/include/emqx.hrl").
+-include_lib("emqx_plugin_helper/include/logger.hrl").
 
 -export([
     initialize_request/2,
@@ -14,7 +15,7 @@
 
 -export([
     get_tools_list/3,
-    send_tools_call/5,
+    send_tools_call/3,
     send_mcp_request/5
 ]).
 
@@ -157,22 +158,118 @@ get_tools_list(Headers, JwtClaims, McpReqId) ->
 send_tools_call(
     HttpHeaders,
     JwtClaims,
-    #{method := <<"tools/call">>, id := McpReqId, params := Params} = McpRequest,
-    WaitResponse,
-    Timeout
+    #{method := <<"tools/call">>, id := McpReqId, params := Params} = McpRequest
 ) ->
+    Name = maps:get(<<"name">>, Params, <<>>),
+    Result = case string:split(Name, ":") of
+        [ToolType, ToolName] ->
+            case mcp_bridge_tool_registry:get_tools(ToolType) of
+                {ok, #{protocol := mcp_over_mqtt}} ->
+                    send_mom_tools_call(ToolType, ToolName, HttpHeaders, JwtClaims, McpRequest);
+                {ok, #{protocol := custom, module := Module, tool_opts := ToolOpts}} ->
+                    send_custom_tool_call(
+                        Module,
+                        ToolType,
+                        ToolName,
+                        HttpHeaders,
+                        JwtClaims,
+                        McpRequest,
+                        ToolOpts
+                    );
+                {error, not_found} ->
+                    {error, #{
+                        reason => tool_type_not_found,
+                        tool_type => ToolType,
+                        details => <<"No tools found for the specified tool type. "
+                            "Maybe the MCP server that provides this tool type is not running.">>
+                    }}
+            end;
+        _ ->
+            {error, #{
+                reason => invalid_tool_name,
+                tool_name => Name,
+                details => <<"Tool name must be in format 'tool_type:tool_name'">>
+            }}
+    end,
+    call_tool_result(Result, McpReqId).
+
+send_mom_tools_call(ToolType, ToolName, HttpHeaders, JwtClaims, #{params := Params} = R) ->
     case get_target_clientid(HttpHeaders, JwtClaims, Params) of
         {error, Reason} ->
-            call_tool_result({error, Reason}, McpReqId);
+            {error, Reason};
         MqttClientId ->
-            Result =
-                case mcp_bridge_tools_mom:on_tools_call(MqttClientId, McpRequest) of
-                    {ok, Topic, McpRequest1} ->
-                        send_mcp_request(MqttClientId, Topic, McpRequest1, WaitResponse, Timeout);
-                    {error, Reason} ->
-                        {error, Reason}
-                end,
-            call_tool_result(Result, McpReqId)
+            Topic = mcp_bridge_topics:get_topic(rpc, #{
+                mcp_clientid => ?MCP_CLIENTID_B,
+                server_id => MqttClientId,
+                server_name => ToolType
+            }),
+            %% offload the target client id param if exists
+            Params1 = maps:remove(?TARGET_CLIENTID_KEY, Params),
+            %% offload the tool type from the tool name
+            R1 = R#{params := Params1#{<<"name">> => ToolName}},
+            Meta = #{mqtt_clientid => MqttClientId},
+            case mcp_bridge_tools_mom:on_tools_call(ToolType, ToolName, Topic, R1, Meta) of
+                {ok, Topic, R2} ->
+                    %% For MCP over MQTT clients, we always wait for a response
+                    WaitResponse = true,
+                    Timeout = maps:get(<<"timeout">>, Params, 5_000),
+                    send_mcp_request(MqttClientId, Topic, R2, WaitResponse, Timeout);
+                {error, Reason} ->
+                    {error, Reason}
+            end
+    end.
+
+send_custom_tool_call(
+    Module,
+    ToolType,
+    ToolName0,
+    HttpHeaders,
+    JwtClaims,
+    #{params := Params},
+    ToolOpts
+) ->
+    try binary_to_existing_atom(ToolName0) of
+        ToolName ->
+            case erlang:function_exported(Module, ToolName, 2) of
+                true ->
+                    try
+                        Module:ToolName(maps:get(<<"arguments">>, Params), #{
+                            http_headers => HttpHeaders,
+                            jwt_claims => JwtClaims,
+                            opts => maps:get(ToolName, ToolOpts, #{})
+                        })
+                    catch
+                        Class:Reason:St ->
+                            ?SLOG(error, #{
+                                msg => tool_execution_error,
+                                tag => ?MODULE,
+                                tool_type => ToolType,
+                                tool_name => ToolName0,
+                                class => Class,
+                                reason => Reason,
+                                stacktrace => St
+                            }),
+                            {error, #{
+                                reason => tool_execution_failed,
+                                tool_type => ToolType,
+                                tool_name => ToolName0
+                            }}
+                    end;
+                false ->
+                    {error, #{
+                        reason => tool_not_found,
+                        tool_type => ToolType,
+                        tool_name => ToolName,
+                        details => <<"The specified tool is not found">>
+                    }}
+            end
+    catch
+        error:badarg ->
+            {error, #{
+                reason => tool_not_found,
+                tool_name => ToolName0,
+                details => <<"The specified tool is not found">>
+            }}
     end.
 
 get_tools_types(Headers, JwtClaims) ->
@@ -257,7 +354,7 @@ list_tools_result(Tools, McpReqId) ->
         tools => Tools
     }).
 
-call_tool_result({ok, Reply}, McpReqId) when is_atom(Reply) ->
+call_tool_result({ok, Reply}, McpReqId) when is_atom(Reply); is_binary(Reply); is_number(Reply) ->
     json_rpc_response(McpReqId, #{
         <<"isError">> => false,
         <<"content">> => [
@@ -267,8 +364,31 @@ call_tool_result({ok, Reply}, McpReqId) when is_atom(Reply) ->
             }
         ]
     });
-call_tool_result({ok, Reply}, McpReqId) ->
-    json_rpc_response(McpReqId, Reply);
+call_tool_result({ok, Reply}, McpReqId) when is_list(Reply) ->
+    Reply1 =
+        #{
+            <<"isError">> => false,
+            <<"content">> => [
+                #{
+                    <<"type">> => <<"text">>,
+                    <<"text">> => emqx_utils_json:encode(R)
+                }
+                || R <- Reply
+            ]
+        },
+    json_rpc_response(McpReqId, Reply1);
+call_tool_result({ok, Reply}, McpReqId) when is_map(Reply) ->
+    Reply1 =
+        #{
+            <<"isError">> => false,
+            <<"content">> => [
+                #{
+                    <<"type">> => <<"text">>,
+                    <<"text">> => emqx_utils_json:encode(Reply)
+                }
+            ]
+        },
+    json_rpc_response(McpReqId, Reply1);
 call_tool_result({error, Reason}, McpReqId) ->
     json_rpc_response(McpReqId, #{
         <<"isError">> => true,

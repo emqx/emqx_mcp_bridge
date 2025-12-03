@@ -21,7 +21,6 @@
 start(_StartType, _StartArgs) ->
     {ok, Sup} = mcp_bridge_sup:start_link(),
     mcp_bridge:hook(),
-    mcp_bridge_tool_registry:create_table(),
     emqx_ctl:register_command(mcp_bridge, {mcp_bridge_cli, cmd}),
     {ok, _} = mcp_bridge:start_listener(),
     {ok, Sup}.

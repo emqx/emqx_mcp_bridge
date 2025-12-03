@@ -13,3 +13,7 @@
 -define(TARGET_CLIENTID_KEY, <<?TARGET_CLIENTID_KEY_S>>).
 -define(TOOL_TYPES_KEY_S, "tool-types").
 -define(TOOL_TYPES_KEY, <<?TOOL_TYPES_KEY_S>>).
+
+-type request_params() :: map().
+-type request_meta() :: map().
+-type response() :: map() | [map()].

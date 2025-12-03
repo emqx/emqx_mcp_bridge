@@ -26,9 +26,17 @@ init([]) ->
         type => worker,
         modules => [mcp_bridge_session]
     },
+    ToolRegistryChildSpec = #{
+        id => mcp_bridge_tool_registry,
+        start => {mcp_bridge_tool_registry, start_link, []},
+        restart => permanent,
+        shutdown => 5000,
+        type => worker,
+        modules => [mcp_bridge_tool_registry]
+    },
     SupFlags = #{
         strategy => one_for_all,
         intensity => 100,
         period => 10
     },
-    {ok, {SupFlags, [ConfigChildSpec, SessionChildSpec]}}.
+    {ok, {SupFlags, [ConfigChildSpec, SessionChildSpec, ToolRegistryChildSpec]}}.

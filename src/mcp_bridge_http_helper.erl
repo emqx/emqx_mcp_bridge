@@ -17,7 +17,7 @@ handle_message(Message, Req, State) ->
         {ok, #{type := json_rpc_request, method := <<"tools/call">>} = RpcMsg} ->
             Headers = cowboy_req:headers(Req),
             JwtClaims = maps:get(jwt_claims, Req, #{}),
-            Response = mcp_bridge_message:send_tools_call(Headers, JwtClaims, RpcMsg, true, 3_000),
+            Response = mcp_bridge_message:send_tools_call(Headers, JwtClaims, RpcMsg),
             {Response, State};
         {ok, #{type := json_rpc_request, method := <<"initialize">>, id := Id}} ->
             Response = mcp_bridge_message:initialize_response(Id, ?MCP_BRIDGE_INFO, #{

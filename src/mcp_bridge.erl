@@ -158,10 +158,15 @@ on_message_publish(Message) ->
     {ok, Message}.
 
 on_message_delivered(
-    _ClientInfo, #message{headers = #{?MCP_MSG_HEADER := McpRequest}, id = Id} = Message
+    _ClientInfo, #message{headers = #{?MCP_MSG_HEADER := McpMsgHeader}, id = Id} = Message
 ) ->
     MqttId = emqx_guid:to_hexstr(Id),
-    ok = maybe_cache_request(McpRequest, MqttId),
+    case McpMsgHeader of
+        #{wait_response := false} ->
+            mcp_bridge_message:reply_caller(McpMsgHeader, delivered);
+        _ ->
+            cache_request(McpMsgHeader, MqttId)
+    end,
     {ok, mcp_bridge_message:complete_mqtt_msg(Message, MqttId)};
 on_message_delivered(_ClientInfo, Message) ->
     {ok, Message}.
@@ -219,17 +224,14 @@ maybe_list_tools(ServerId, ServerName) ->
             ok
     end.
 
-maybe_cache_request(#{wait_response := false} = Request, _) ->
-    mcp_bridge_message:reply_caller(Request, delivered),
-    ok;
-maybe_cache_request(Request, MqttId) ->
+cache_request(McpMsgHeader, MqttId) ->
     CacheK = {?MODULE, request_cache},
     Cache =
         case erlang:get(CacheK) of
             undefined -> #{};
             C -> C
         end,
-    NewCache = maps:put(MqttId, Request, Cache),
+    NewCache = maps:put(MqttId, McpMsgHeader, Cache),
     erlang:put(CacheK, NewCache),
     ok.
 
@@ -252,8 +254,8 @@ handle_mcp_response(MqttId, Result) ->
             C -> C
         end,
     case maps:find(MqttId, Cache) of
-        {ok, Request} ->
-            mcp_bridge_message:reply_caller(Request, Result),
+        {ok, McpMsgHeader} ->
+            mcp_bridge_message:reply_caller(McpMsgHeader, Result),
             NewCache = maps:remove(MqttId, Cache),
             erlang:put(CacheK, remove_expired_request(NewCache)),
             ok;
@@ -262,10 +264,10 @@ handle_mcp_response(MqttId, Result) ->
     end.
 
 load_tools_from_result(_ServerId, ServerName, #{<<"tools">> := ToolsList}) ->
-    mcp_bridge_tool_registry:save_tools(ServerName, ToolsList).
+    mcp_bridge_tool_registry:save_mcp_over_mqtt_tools(ServerName, ToolsList).
 
 load_tools_from_register_msg(_ServerId, ServerName, #{<<"meta">> := #{<<"tools">> := Tools}}) ->
-    mcp_bridge_tool_registry:save_tools(ServerName, Tools);
+    mcp_bridge_tool_registry:save_mcp_over_mqtt_tools(ServerName, Tools);
 load_tools_from_register_msg(_ServerId, _ServerName, _Params) ->
     {error, no_tools}.
 
