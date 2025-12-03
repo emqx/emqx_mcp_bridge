@@ -15,7 +15,6 @@
 -export([
     get_tools_list/3,
     send_tools_call/5,
-    do_send_tools_call/4,
     send_mcp_request/5
 ]).
 
@@ -26,7 +25,6 @@
     json_rpc_notification/2,
     json_rpc_error/4,
     decode_rpc_msg/1,
-    get_topic/2,
     make_mqtt_msg/5,
     reply_caller/2,
     complete_mqtt_msg/2
@@ -135,21 +133,6 @@ decode_rpc_msg(Msg) ->
             {error, #{reason => invalid_json, msg => Msg, details => Reason}}
     end.
 
-get_topic(server_control, #{server_id := ServerId, server_name := ServerName}) ->
-    <<"$mcp-server/", ServerId/binary, "/", ServerName/binary>>;
-get_topic(server_capability_list_changed, #{server_id := ServerId, server_name := ServerName}) ->
-    <<"$mcp-server/capability/", ServerId/binary, "/", ServerName/binary>>;
-get_topic(server_resources_updated, #{server_id := ServerId, server_name := ServerName}) ->
-    <<"$mcp-server/capability/", ServerId/binary, "/", ServerName/binary>>;
-get_topic(server_presence, #{server_id := ServerId, server_name := ServerName}) ->
-    <<"$mcp-server/presence/", ServerId/binary, "/", ServerName/binary>>;
-get_topic(client_presence, #{mcp_clientid := McpClientId}) ->
-    <<"$mcp-client/presence/", McpClientId/binary>>;
-get_topic(client_capability_list_changed, #{mcp_clientid := McpClientId}) ->
-    <<"$mcp-client/capability/", McpClientId/binary>>;
-get_topic(rpc, #{mcp_clientid := McpClientId, server_id := ServerId, server_name := ServerName}) ->
-    <<"$mcp-rpc/", McpClientId/binary, "/", ServerId/binary, "/", ServerName/binary>>.
-
 make_mqtt_msg(Topic, Payload, McpClientId, Flags, QoS) ->
     UserProps = [
         {<<"MCP-COMPONENT-TYPE">>, <<"mcp-client">>},
@@ -182,7 +165,13 @@ send_tools_call(
         {error, Reason} ->
             call_tool_result({error, Reason}, McpReqId);
         MqttClientId ->
-            Result = do_send_tools_call(MqttClientId, McpRequest, WaitResponse, Timeout),
+            Result =
+                case mcp_bridge_tools_mom:on_tools_call(MqttClientId, McpRequest) of
+                    {ok, Topic, McpRequest1} ->
+                        send_mcp_request(MqttClientId, Topic, McpRequest1, WaitResponse, Timeout);
+                    {error, Reason} ->
+                        {error, Reason}
+                end,
             call_tool_result(Result, McpReqId)
     end.
 
@@ -229,27 +218,6 @@ get_target_clientid(HttpHeaders, JwtClaims, _Params) ->
                 JwtClaims,
                 {error, <<?TARGET_CLIENTID_KEY_S " not found in jwt claims">>}
             )
-    end.
-
-do_send_tools_call(MqttClientId, #{params := Params} = McpRequest, WaitResponse, Timeout) ->
-    Name = maps:get(<<"name">>, Params, <<>>),
-    case string:split(Name, ":") of
-        [ToolType, ToolName] ->
-            case mcp_bridge_tool_registry:get_tools(ToolType) of
-                {ok, _} ->
-                    Params1 = maps:remove(?TARGET_CLIENTID_KEY, Params),
-                    McpRequest1 = McpRequest#{params := Params1#{<<"name">> => ToolName}},
-                    Topic = get_topic(rpc, #{
-                        mcp_clientid => ?MCP_CLIENTID_B,
-                        server_id => MqttClientId,
-                        server_name => ToolType
-                    }),
-                    send_mcp_request(MqttClientId, Topic, McpRequest1, WaitResponse, Timeout);
-                {error, not_found} ->
-                    {error, tool_not_found}
-            end;
-        _ ->
-            {error, #{reason => invalid_tool_name, name => Name}}
     end.
 
 send_mcp_request(MqttClientId, Topic, McpRequest, WaitResponse, Timeout) ->
@@ -319,13 +287,11 @@ format_reason(Reason) when is_atom(Reason) ->
 format_reason(Reason) ->
     iolist_to_binary(io_lib:format("~p", [Reason])).
 
-make_mcp_request(Mref, #{id := McpReqId, method := Method, params := Params}, WaitResponse) ->
+make_mcp_msg_header(Mref, McpRequest, WaitResponse) ->
     #{
         caller => self(),
         monitor_ref => Mref,
-        id => McpReqId,
-        method => Method,
-        params => Params,
+        mcp_request => McpRequest,
         wait_response => WaitResponse,
         timestamp => erlang:system_time(millisecond)
     }.
@@ -333,11 +299,12 @@ make_mcp_request(Mref, #{id := McpReqId, method := Method, params := Params}, Wa
 make_semi_finished_mqtt_msg(Topic, Mref, McpRequest, WaitResponse) ->
     %% Set an empty payload and put the MCP request into message header
     Msg = make_mqtt_msg(Topic, <<>>, ?MCP_CLIENTID_B, #{}, 1),
-    emqx_message:set_header(?MCP_MSG_HEADER, make_mcp_request(Mref, McpRequest, WaitResponse), Msg).
+    emqx_message:set_header(?MCP_MSG_HEADER, make_mcp_msg_header(Mref, McpRequest, WaitResponse), Msg).
 
 complete_mqtt_msg(
-    #message{headers = #{?MCP_MSG_HEADER := McpRequest} = Headers} = Message, McpReqId
+    #message{headers = #{?MCP_MSG_HEADER := McpMsgHeader} = Headers} = Message, MqttId
 ) ->
-    #{method := Method, params := Params} = McpRequest,
-    Payload = json_rpc_request(McpReqId, Method, Params),
+    #{mcp_request := #{method := Method, params := Params}} = McpMsgHeader,
+    %% replace the request id with MQTT message id to avoid conflict
+    Payload = json_rpc_request(MqttId, Method, Params),
     Message#message{payload = Payload, headers = maps:remove(?MCP_MSG_HEADER, Headers)}.

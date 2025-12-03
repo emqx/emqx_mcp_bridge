@@ -184,14 +184,14 @@ on_message_puback(_PacketId, #message{} = Message, PubRes, RC) ->
 
 initialize_mcp_server(ServerInfo) ->
     InitReq = mcp_bridge_message:initialize_request(?INIT_REQ_ID, ?MCP_BRIDGE_INFO, #{}),
-    Topic = mcp_bridge_message:get_topic(server_control, ServerInfo),
+    Topic = mcp_bridge_topics:get_topic(server_control, ServerInfo),
     InitReqMsg = mcp_bridge_message:make_mqtt_msg(Topic, InitReq, ?MCP_CLIENTID_B, #{}, 1),
     self() ! {deliver, Topic, InitReqMsg},
     ok.
 
 send_initialized_notification(ServerId, ServerName) ->
     Notif = mcp_bridge_message:initialized_notification(),
-    Topic = mcp_bridge_message:get_topic(rpc, #{
+    Topic = mcp_bridge_topics:get_topic(rpc, #{
         mcp_clientid => ?MCP_CLIENTID_B,
         server_id => ServerId,
         server_name => ServerName
@@ -204,7 +204,7 @@ maybe_list_tools(ServerId, ServerName) ->
     case erlang:get({?MODULE, need_list_tools}) of
         true ->
             ListToolsReq = mcp_bridge_message:list_tools_request(?LIST_TOOLS_REQ_ID),
-            Topic = mcp_bridge_message:get_topic(rpc, #{
+            Topic = mcp_bridge_topics:get_topic(rpc, #{
                 mcp_clientid => ?MCP_CLIENTID_B,
                 server_id => ServerId,
                 server_name => ServerName
