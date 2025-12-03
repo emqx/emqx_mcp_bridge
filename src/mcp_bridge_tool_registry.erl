@@ -96,7 +96,11 @@ save_tools(Protocol, Module, ToolType, Tools, ToolOpts) ->
 
 get_tools(ToolType) ->
     case mnesia:dirty_read(?TAB, ToolType) of
-        [#emqx_mcp_tool_registry{tools = Tools, protocol = Proto, module = Mod, tool_opts = ToolOpts}] ->
+        [
+            #emqx_mcp_tool_registry{
+                tools = Tools, protocol = Proto, module = Mod, tool_opts = ToolOpts
+            }
+        ] ->
             Tools1 = inject_target_client_params(Proto, Tools),
             {ok, #{tools => Tools1, protocol => Proto, module => Mod, tool_opts => ToolOpts}};
         [] ->
@@ -154,19 +158,22 @@ code_change(_OldVsn, State, _Extra) ->
 %% Internal functions
 %%==============================================================================
 load_custom_tools() ->
-    lists:foreach(fun({Mod, _}) ->
-        case atom_to_list(Mod) of
-            "mcp_bridge_tools_" ++ _ ->
-                case get_custom_tools(Mod) of
-                    no_tools ->
-                        ok;
-                    {ToolType, Tools, ToolOpts} ->
-                        save_custom_tools(Mod, ToolType, Tools, ToolOpts)
-                end;
-            _ ->
-                ok
-        end
-    end, code:all_loaded()).
+    lists:foreach(
+        fun({Mod, _}) ->
+            case atom_to_list(Mod) of
+                "mcp_bridge_tools_" ++ _ ->
+                    case get_custom_tools(Mod) of
+                        no_tools ->
+                            ok;
+                        {ToolType, Tools, ToolOpts} ->
+                            save_custom_tools(Mod, ToolType, Tools, ToolOpts)
+                    end;
+                _ ->
+                    ok
+            end
+        end,
+        code:all_loaded()
+    ).
 
 get_custom_tools(Module) ->
     Attrs = Module:module_info(attributes),
@@ -190,7 +197,8 @@ format_tool(#{name := Name, title := _, description := _, inputSchema := _} = To
     validate_tool_name(Name, Module),
     %% 1. ensure the tool definition can be encoded to JSON
     %% 2. convert keys to binaries
-    try emqx_utils_json:decode(emqx_utils_json:encode(Tool))
+    try
+        emqx_utils_json:decode(emqx_utils_json:encode(Tool))
     catch
         _:Reason ->
             throw({invalid_tool_definition, Module, Name, Reason})
@@ -199,12 +207,16 @@ format_tool(Other, Module) ->
     throw({missing_fields_in_tool_definition, Module, Other}).
 
 get_tool_opts(Attrs) ->
-    lists:foldl(fun
-        ({tool, [#{name := Name, opts := Opts}]}, Acc) ->
-            Acc#{Name => Opts};
-        (_, Acc) ->
-            Acc
-    end, #{}, Attrs).
+    lists:foldl(
+        fun
+            ({tool, [#{name := Name, opts := Opts}]}, Acc) ->
+                Acc#{Name => Opts};
+            (_, Acc) ->
+                Acc
+        end,
+        #{},
+        Attrs
+    ).
 
 validate_tool_name(Name, Module) when is_atom(Name) ->
     case erlang:function_exported(Module, Name, 2) of
@@ -242,7 +254,7 @@ maybe_add_target_client_param(#{<<"properties">> := Properties} = InputSchema) -
     end.
 
 bin(Bin) when is_binary(Bin) -> Bin;
-bin(String) when is_list(String) -> 
+bin(String) when is_list(String) ->
     list_to_binary(String);
 bin(Atom) when is_atom(Atom) ->
     list_to_binary(atom_to_list(Atom)).

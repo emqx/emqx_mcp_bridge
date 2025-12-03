@@ -161,36 +161,39 @@ send_tools_call(
     #{method := <<"tools/call">>, id := McpReqId, params := Params} = McpRequest
 ) ->
     Name = maps:get(<<"name">>, Params, <<>>),
-    Result = case string:split(Name, ":") of
-        [ToolType, ToolName] ->
-            case mcp_bridge_tool_registry:get_tools(ToolType) of
-                {ok, #{protocol := mcp_over_mqtt}} ->
-                    send_mom_tools_call(ToolType, ToolName, HttpHeaders, JwtClaims, McpRequest);
-                {ok, #{protocol := custom, module := Module, tool_opts := ToolOpts}} ->
-                    send_custom_tool_call(
-                        Module,
-                        ToolType,
-                        ToolName,
-                        HttpHeaders,
-                        JwtClaims,
-                        McpRequest,
-                        ToolOpts
-                    );
-                {error, not_found} ->
-                    {error, #{
-                        reason => tool_type_not_found,
-                        tool_type => ToolType,
-                        details => <<"No tools found for the specified tool type. "
-                            "Maybe the MCP server that provides this tool type is not running.">>
-                    }}
-            end;
-        _ ->
-            {error, #{
-                reason => invalid_tool_name,
-                tool_name => Name,
-                details => <<"Tool name must be in format 'tool_type:tool_name'">>
-            }}
-    end,
+    Result =
+        case string:split(Name, ":") of
+            [ToolType, ToolName] ->
+                case mcp_bridge_tool_registry:get_tools(ToolType) of
+                    {ok, #{protocol := mcp_over_mqtt}} ->
+                        send_mom_tools_call(ToolType, ToolName, HttpHeaders, JwtClaims, McpRequest);
+                    {ok, #{protocol := custom, module := Module, tool_opts := ToolOpts}} ->
+                        send_custom_tool_call(
+                            Module,
+                            ToolType,
+                            ToolName,
+                            HttpHeaders,
+                            JwtClaims,
+                            McpRequest,
+                            ToolOpts
+                        );
+                    {error, not_found} ->
+                        {error, #{
+                            reason => tool_type_not_found,
+                            tool_type => ToolType,
+                            details => <<
+                                "No tools found for the specified tool type. "
+                                "Maybe the MCP server that provides this tool type is not running."
+                            >>
+                        }}
+                end;
+            _ ->
+                {error, #{
+                    reason => invalid_tool_name,
+                    tool_name => Name,
+                    details => <<"Tool name must be in format 'tool_type:tool_name'">>
+                }}
+        end,
     call_tool_result(Result, McpReqId).
 
 send_mom_tools_call(ToolType, ToolName, HttpHeaders, JwtClaims, #{params := Params} = R) ->
@@ -373,7 +376,7 @@ call_tool_result({ok, Reply}, McpReqId) when is_list(Reply) ->
                     <<"type">> => <<"text">>,
                     <<"text">> => emqx_utils_json:encode(R)
                 }
-                || R <- Reply
+             || R <- Reply
             ]
         },
     json_rpc_response(McpReqId, Reply1);
@@ -419,7 +422,9 @@ make_mcp_msg_header(Mref, McpRequest, WaitResponse) ->
 make_semi_finished_mqtt_msg(Topic, Mref, McpRequest, WaitResponse) ->
     %% Set an empty payload and put the MCP request into message header
     Msg = make_mqtt_msg(Topic, <<>>, ?MCP_CLIENTID_B, #{}, 1),
-    emqx_message:set_header(?MCP_MSG_HEADER, make_mcp_msg_header(Mref, McpRequest, WaitResponse), Msg).
+    emqx_message:set_header(
+        ?MCP_MSG_HEADER, make_mcp_msg_header(Mref, McpRequest, WaitResponse), Msg
+    ).
 
 complete_mqtt_msg(
     #message{headers = #{?MCP_MSG_HEADER := McpMsgHeader} = Headers} = Message, MqttId
