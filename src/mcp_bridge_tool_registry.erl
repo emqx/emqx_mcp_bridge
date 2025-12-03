@@ -1,4 +1,4 @@
--module(mcp_bridge_tools).
+-module(mcp_bridge_tool_registry).
 
 -include("mcp_bridge.hrl").
 -include_lib("emqx_plugin_helper/include/emqx.hrl").

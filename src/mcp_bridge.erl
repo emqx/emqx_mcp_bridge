@@ -262,10 +262,10 @@ handle_mcp_response(MqttId, Result) ->
     end.
 
 load_tools_from_result(_ServerId, ServerName, #{<<"tools">> := ToolsList}) ->
-    mcp_bridge_tools:save_tools(ServerName, ToolsList).
+    mcp_bridge_tool_registry:save_tools(ServerName, ToolsList).
 
 load_tools_from_register_msg(_ServerId, ServerName, #{<<"meta">> := #{<<"tools">> := Tools}}) ->
-    mcp_bridge_tools:save_tools(ServerName, Tools);
+    mcp_bridge_tool_registry:save_tools(ServerName, Tools);
 load_tools_from_register_msg(_ServerId, _ServerName, _Params) ->
     {error, no_tools}.
 

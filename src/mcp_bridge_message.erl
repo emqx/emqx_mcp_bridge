@@ -166,9 +166,9 @@ make_mqtt_msg(Topic, Payload, McpClientId, Flags, QoS) ->
 get_tools_list(Headers, JwtClaims, McpReqId) ->
     case get_tools_types(Headers, JwtClaims) of
         {ok, ToolTypes} ->
-            list_tools_result(mcp_bridge_tools:list_tools(ToolTypes), McpReqId);
+            list_tools_result(mcp_bridge_tool_registry:list_tools(ToolTypes), McpReqId);
         {error, _} ->
-            list_tools_result(mcp_bridge_tools:list_tools(), McpReqId)
+            list_tools_result(mcp_bridge_tool_registry:list_tools(), McpReqId)
     end.
 
 send_tools_call(
@@ -235,7 +235,7 @@ do_send_tools_call(MqttClientId, #{params := Params} = McpRequest, WaitResponse,
     Name = maps:get(<<"name">>, Params, <<>>),
     case string:split(Name, ":") of
         [ToolType, ToolName] ->
-            case mcp_bridge_tools:get_tools(ToolType) of
+            case mcp_bridge_tool_registry:get_tools(ToolType) of
                 {ok, _} ->
                     Params1 = maps:remove(?TARGET_CLIENTID_KEY, Params),
                     McpRequest1 = McpRequest#{params := Params1#{<<"name">> => ToolName}},
