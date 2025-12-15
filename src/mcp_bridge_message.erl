@@ -380,7 +380,11 @@ call_tool_result({ok, Reply}, McpReqId) when is_list(Reply) ->
             ]
         },
     json_rpc_response(McpReqId, Reply1);
+call_tool_result({ok, #{<<"content">> := Content} = Reply}, McpReqId) when is_list(Content) ->
+    %% already in expected format (MCP result)
+    json_rpc_response(McpReqId, Reply);
 call_tool_result({ok, Reply}, McpReqId) when is_map(Reply) ->
+    %% wrap the map as a single text content
     Reply1 =
         #{
             <<"isError">> => false,
