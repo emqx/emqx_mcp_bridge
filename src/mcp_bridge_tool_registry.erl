@@ -16,6 +16,7 @@
     save_mcp_over_mqtt_tools/2,
     save_custom_tools/4,
     save_tools/5,
+    delete_tools/1,
     get_tools/1,
     list_tools/0,
     list_tools/1
@@ -93,6 +94,9 @@ save_tools(Protocol, Module, ToolType, Tools, ToolOpts) ->
             tool_opts = ToolOpts
         }
     ).
+
+delete_tools(ToolType) ->
+    mria:dirty_delete(?TAB, ToolType).
 
 get_tools(ToolType) ->
     case mnesia:dirty_read(?TAB, ToolType) of
