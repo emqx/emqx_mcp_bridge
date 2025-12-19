@@ -38,7 +38,22 @@ After loading tools from the MCP Server, the plugin transforms the tool list as 
 
 ### List only specific tool types
 
-When an MCP-HTTP client requests the tool list, it can specify which tool types to include in the response. The plugin retrieves the desired tool types from the HTTP headers or JWT claims based on the `get_tool_types_from` configuration. If no tool types are specified, the plugin returns tools from all available tool types.
+When an MCP-HTTP client requests the tool list, it can specify which tool types to include in the response. The plugin retrieves the desired `tool-types` from the HTTP headers or JWT claims based on the `get_tool_types_from` configuration.
+
+When passing the `tool-types` in HTTP headers, the client should use the `Tool-Types` header with a comma-separated list of tool types. For example:
+```
+tool-types: type1,type2,type3
+```
+
+When passing the `tool-types` in JWT claims, the client should include a claim named `tool-types` with a list of tool types. For example:
+```json
+{
+  "sub": "client1",
+  "tool-types": ["type1", "type2", "type3"]
+}
+```
+
+If no tool types are specified, the plugin returns tools from all available tool types.
 
 ## Create custom MCP tools
 
