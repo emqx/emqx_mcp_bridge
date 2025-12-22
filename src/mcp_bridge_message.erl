@@ -15,6 +15,7 @@
 ]).
 
 -export([
+    deliver_list_tools_request/3,
     get_tools_list/3,
     send_tools_call/3,
     send_mcp_request/5
@@ -441,3 +442,15 @@ complete_mqtt_msg(
     %% replace the request id with MQTT message id to avoid conflict
     Payload = json_rpc_request(MqttId, Method, Params),
     Message#message{payload = Payload, headers = maps:remove(?MCP_MSG_HEADER, Headers)}.
+
+deliver_list_tools_request(Pid, ServerId, ServerName) ->
+    ListToolsReq = list_tools_request(?LIST_TOOLS_REQ_ID),
+    Topic = mcp_bridge_topics:get_topic(rpc, #{
+        mcp_clientid => ?MCP_CLIENTID_B,
+        server_id => ServerId,
+        server_name => ServerName
+    }),
+    ListToolsReqMsg = make_mqtt_msg(
+        Topic, ListToolsReq, ?MCP_CLIENTID_B, #{}, 1
+    ),
+    Pid ! {deliver, Topic, ListToolsReqMsg}.

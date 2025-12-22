@@ -13,6 +13,8 @@
 -define(TARGET_CLIENTID_KEY, <<?TARGET_CLIENTID_KEY_S>>).
 -define(TOOL_TYPES_KEY_S, "tool-types").
 -define(TOOL_TYPES_KEY, <<?TOOL_TYPES_KEY_S>>).
+-define(INIT_REQ_ID, <<"init_1">>).
+-define(LIST_TOOLS_REQ_ID, <<"list_tools_1">>).
 
 -type request_params() :: map().
 -type request_meta() :: map().

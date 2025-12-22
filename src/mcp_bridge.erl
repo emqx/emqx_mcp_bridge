@@ -47,8 +47,6 @@
 
 -define(PROP_K_MCP_COMP_TYPE, <<"MCP-COMPONENT-TYPE">>).
 -define(PROP_K_MCP_SERVER_NAME, <<"MCP-SERVER-NAME">>).
--define(INIT_REQ_ID, <<"init_1">>).
--define(LIST_TOOLS_REQ_ID, <<"list_tools_1">>).
 
 %% NOTE
 %% Functions from EMQX are unavailable at compile time.
@@ -101,7 +99,9 @@ on_message_publish(
     {ServerId, ServerName} = split_id_and_server_name(ServerIdAndName),
     case mcp_bridge_message:decode_rpc_msg(PresenceMsg) of
         {ok, #{method := <<"notifications/server/online">>, params := Params}} ->
-            case load_tools_from_register_msg(ServerId, ServerName, Params) of
+            case
+                mcp_bridge_tool_registry:load_tools_from_register_msg(ServerId, ServerName, Params)
+            of
                 ok -> ok;
                 {error, no_tools} -> erlang:put({?MODULE, need_list_tools}, true)
             end,
@@ -137,7 +137,7 @@ on_message_publish(
                 server_id => ServerId,
                 server_name => ServerName
             }),
-            load_tools_from_result(ServerId, ServerName, Result);
+            mcp_bridge_tool_registry:load_tools_from_result(ServerId, ServerName, Result);
         {ok, #{id := ?LIST_TOOLS_REQ_ID} = Response} ->
             ?SLOG(error, #{msg => list_tools_failed, rpc_response => Response});
         {ok, #{id := Id, type := json_rpc_response, result := Result}} ->
@@ -189,16 +189,7 @@ send_initialized_notification(ServerId, ServerName) ->
 maybe_list_tools(ServerId, ServerName) ->
     case erlang:get({?MODULE, need_list_tools}) of
         true ->
-            ListToolsReq = mcp_bridge_message:list_tools_request(?LIST_TOOLS_REQ_ID),
-            Topic = mcp_bridge_topics:get_topic(rpc, #{
-                mcp_clientid => ?MCP_CLIENTID_B,
-                server_id => ServerId,
-                server_name => ServerName
-            }),
-            ListToolsReqMsg = mcp_bridge_message:make_mqtt_msg(
-                Topic, ListToolsReq, ?MCP_CLIENTID_B, #{}, 1
-            ),
-            self() ! {deliver, Topic, ListToolsReqMsg},
+            mcp_bridge_message:deliver_list_tools_request(self(), ServerId, ServerName),
             erlang:erase({?MODULE, need_list_tools}),
             ok;
         undefined ->
@@ -243,14 +234,6 @@ handle_mcp_response(MqttId, Result) ->
         error ->
             ?SLOG(warning, #{msg => unknown_mcp_response_id, mqtt_id => MqttId})
     end.
-
-load_tools_from_result(_ServerId, ServerName, #{<<"tools">> := ToolsList}) ->
-    mcp_bridge_tool_registry:save_mcp_over_mqtt_tools(ServerName, ToolsList).
-
-load_tools_from_register_msg(_ServerId, ServerName, #{<<"meta">> := #{<<"tools">> := Tools}}) ->
-    mcp_bridge_tool_registry:save_mcp_over_mqtt_tools(ServerName, Tools);
-load_tools_from_register_msg(_ServerId, _ServerName, _Params) ->
-    {error, no_tools}.
 
 %%--------------------------------------------------------------------
 %% Plugin callbacks

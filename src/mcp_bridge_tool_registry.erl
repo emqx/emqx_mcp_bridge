@@ -22,6 +22,11 @@
     list_tools/1
 ]).
 
+-export([
+    load_tools_from_result/3,
+    load_tools_from_register_msg/3
+]).
+
 -record(emqx_mcp_tool_registry, {
     tool_type,
     tools = [],
@@ -37,6 +42,7 @@
 %%==============================================================================
 start_link() ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
+
 stop() ->
     gen_server:stop(?MODULE).
 
@@ -137,6 +143,7 @@ init([]) ->
     erlang:process_flag(trap_exit, true),
     ok = create_table(),
     load_custom_tools(),
+    load_mcp_over_mqtt_tools(),
     {ok, #{}}.
 
 handle_call(_Request, _From, State) ->
@@ -147,6 +154,30 @@ handle_cast(_Msg, State) ->
     ?SLOG(warning, #{msg => unexpected_cast, tag => ?MODULE, cast => _Msg}),
     {noreply, State}.
 
+handle_info({deliver, <<"$mcp-server/presence/", _/binary>>, Msg0}, State) ->
+    %% Handle retained presence messages for MCP over MQTT tools
+    Msg = emqx_message:payload(Msg0),
+    <<"$mcp-server/presence/", ServerIdAndName/binary>> = emqx_message:topic(Msg0),
+    {ServerId, ServerName} = split_id_and_server_name(ServerIdAndName),
+    case mcp_bridge_message:decode_rpc_msg(Msg) of
+        {ok, #{method := <<"notifications/server/online">>, params := Params}} ->
+            case load_tools_from_register_msg(ServerId, ServerName, Params) of
+                ok ->
+                    ok;
+                {error, no_tools} ->
+                    case emqx_cm:lookup_channels(local, ServerId) of
+                        [] ->
+                            ok;
+                        [Pid | _] ->
+                            mcp_bridge_message:deliver_list_tools_request(Pid, ServerId, ServerName)
+                    end
+            end;
+        {ok, Msg} ->
+            ?SLOG(error, #{msg => unsupported_client_presence_msg, rpc_msg => Msg});
+        {error, Reason} ->
+            ?SLOG(error, #{msg => decode_rpc_msg_failed, reason => Reason})
+    end,
+    {noreply, State};
 handle_info(_Info, State) ->
     ?SLOG(warning, #{msg => unexpected_info, tag => ?MODULE, info => _Info}),
     {noreply, State}.
@@ -178,6 +209,17 @@ load_custom_tools() ->
         end,
         code:all_loaded()
     ).
+
+load_mcp_over_mqtt_tools() ->
+    %% simulate subscription to $mcp-server/presence/# to get retained messages
+    McpTopicFilter = <<"$mcp-server/presence/#">>,
+    case erlang:function_exported(emqx_retainer_dispatcher, dispatch, 1) of
+        true ->
+            emqx_retainer_dispatcher:dispatch(McpTopicFilter);
+        false ->
+            Context = emqx_retainer:context(),
+            emqx_retainer_dispatcher:dispatch(Context, McpTopicFilter)
+    end.
 
 get_custom_tools(Module) ->
     Attrs = Module:module_info(attributes),
@@ -255,6 +297,21 @@ maybe_add_target_client_param(#{<<"properties">> := Properties} = InputSchema) -
             };
         _ ->
             InputSchema
+    end.
+
+load_tools_from_result(_ServerId, ServerName, #{<<"tools">> := ToolsList}) ->
+    save_mcp_over_mqtt_tools(ServerName, ToolsList).
+
+load_tools_from_register_msg(_ServerId, ServerName, #{<<"meta">> := #{<<"tools">> := Tools}}) ->
+    save_mcp_over_mqtt_tools(ServerName, Tools);
+load_tools_from_register_msg(_ServerId, _ServerName, _Params) ->
+    {error, no_tools}.
+
+split_id_and_server_name(Str) ->
+    %% Split the server_id and server_name from the topic
+    case string:split(Str, <<"/">>) of
+        [ServerId, ServerName] -> {ServerId, ServerName};
+        _ -> throw({error, {invalid_id_and_server_name, Str}})
     end.
 
 bin(Bin) when is_binary(Bin) -> Bin;
