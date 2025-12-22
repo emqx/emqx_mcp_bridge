@@ -10,7 +10,8 @@
     initialize_response/3,
     initialize_response/4,
     initialized_notification/0,
-    list_tools_request/1
+    list_tools_request/1,
+    ping_response/1
 ]).
 
 -export([
@@ -72,6 +73,9 @@ list_tools_request(Id) ->
         <<"tools/list">>,
         #{}
     ).
+
+ping_response(Id) ->
+    json_rpc_response(Id, #{}).
 
 %%==============================================================================
 %% JSON RPC Messages

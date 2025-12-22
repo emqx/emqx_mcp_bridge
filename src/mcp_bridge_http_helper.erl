@@ -26,7 +26,14 @@ handle_message(Message, Req, State) ->
                 }
             }),
             {Response, State};
+        {ok, #{type := json_rpc_request, method := <<"ping">>, id := Id}} ->
+            Response = mcp_bridge_message:ping_response(Id),
+            {Response, State};
         {ok, #{type := json_rpc_notification, method := <<"notifications/initialized">>}} ->
+            {no_response, State};
+        {ok, #{type := json_rpc_notification, method := <<"notifications/cancelled">>}} ->
+            %% We do not support cancelling requests currently, as it requires managing
+            %% session state for each request.
             {no_response, State};
         {ok, #{type := _}} ->
             {unsupported, State};
