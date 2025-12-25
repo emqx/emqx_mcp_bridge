@@ -224,7 +224,8 @@ send_mom_tools_call(ToolType, ToolName, HttpHeaders, JwtClaims, #{params := Para
                 server_name => ToolType
             }),
             %% offload the target client id param if exists
-            Params1 = maps:remove(?TARGET_CLIENTID_KEY, Params),
+            Args = maps:get(<<"arguments">>, Params, #{}),
+            Params1 = Params#{<<"arguments">> => maps:remove(?TARGET_CLIENTID_KEY, Args)},
             %% offload the tool type from the tool name
             R1 = R#{params := Params1#{<<"name">> => ToolName}},
             Meta = #{mqtt_clientid => MqttClientId},

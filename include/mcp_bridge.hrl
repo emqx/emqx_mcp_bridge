@@ -6,7 +6,7 @@
     <<"version">> => <<?plugin_rel_vsn>>,
     <<"title">> => <<"EMQX MCP Bridge">>
 }).
--define(MCP_MSG_HEADER, emqx_mcp_bridge).
+-define(MCP_MSG_HEADER, '$emqx_mcp_bridge').
 -define(MCP_CLIENTID_S, "emqx_mcp_bridge").
 -define(MCP_CLIENTID_B, <<"emqx_mcp_bridge">>).
 -define(TARGET_CLIENTID_KEY_S, "target-mqtt-client-id").
