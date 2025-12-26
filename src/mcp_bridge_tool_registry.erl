@@ -13,18 +13,13 @@
 -export([
     create_table/0,
     delete_table/0,
-    save_mcp_over_mqtt_tools/2,
-    save_custom_tools/4,
-    save_tools/5,
+    save_mcp_over_mqtt_tools/3,
+    save_custom_tools/5,
+    save_tools/6,
     delete_tools/1,
     get_tools/1,
     list_tools/0,
     list_tools/1
-]).
-
--export([
-    load_tools_from_result/3,
-    load_tools_from_register_msg/3
 ]).
 
 -record(emqx_mcp_tool_registry, {
@@ -77,16 +72,22 @@ create_table() ->
 delete_table() ->
     mnesia:delete_table(?TAB).
 
-save_mcp_over_mqtt_tools(ToolType, Tools) ->
-    save_tools(mcp_over_mqtt, undefined, ToolType, Tools, #{}).
+save_mcp_over_mqtt_tools(ToolType, ServerVsn, Tools) ->
+    save_tools(mcp_over_mqtt, undefined, ToolType, ServerVsn, Tools, #{}).
 
-save_custom_tools(Module, ToolType, Tools, ToolOpts) ->
-    save_tools(custom, Module, ToolType, Tools, ToolOpts).
+save_custom_tools(Module, ToolType, ServerVsn, Tools, ToolOpts) ->
+    save_tools(custom, Module, ToolType, ServerVsn, Tools, ToolOpts).
 
-save_tools(Protocol, Module, ToolType, Tools, ToolOpts) ->
-    TaggedTools = [
+save_tools(Protocol, Module, ToolType, ServerVsn, Tools, ToolOpts) ->
+    Tools1 = [
         ToolSchema#{
-            <<"name">> => <<ToolType/binary, ":", Name/binary>>
+            <<"name">> => mcp_bridge_tools:pack_tool_name(ToolType, ServerVsn, Name),
+            <<"description">> => maybe_inject_usage_notes(
+                Protocol,
+                ToolType,
+                ServerVsn,
+                maps:get(<<"description">>, ToolSchema, <<>>)
+            )
         }
      || #{<<"name">> := Name} = ToolSchema <- Tools
     ],
@@ -96,10 +97,20 @@ save_tools(Protocol, Module, ToolType, Tools, ToolOpts) ->
             protocol = Protocol,
             module = Module,
             tool_type = ToolType,
-            tools = TaggedTools,
+            tools = Tools1,
             tool_opts = ToolOpts
         }
     ).
+
+maybe_inject_usage_notes(mcp_over_mqtt, ToolType, ServerVsn, Description) ->
+    emqx_utils_json:encode(#{
+        usage_notes =>
+            <<"This tool only works for devices of type: ", ToolType/binary, " and version: ",
+                ServerVsn/binary>>,
+        details => Description
+    });
+maybe_inject_usage_notes(custom, _, _, Description) ->
+    Description.
 
 delete_tools(ToolType) ->
     mria:dirty_delete(?TAB, ToolType).
@@ -160,17 +171,12 @@ handle_info({deliver, <<"$mcp-server/presence/", _/binary>>, Msg0}, State) ->
     <<"$mcp-server/presence/", ServerIdAndName/binary>> = emqx_message:topic(Msg0),
     {ServerId, ServerName} = split_id_and_server_name(ServerIdAndName),
     case mcp_bridge_message:decode_rpc_msg(Msg) of
-        {ok, #{method := <<"notifications/server/online">>, params := Params}} ->
-            case load_tools_from_register_msg(ServerId, ServerName, Params) of
-                ok ->
+        {ok, #{method := <<"notifications/server/online">>}} ->
+            case emqx_cm:lookup_channels(local, ServerId) of
+                [] ->
                     ok;
-                {error, no_tools} ->
-                    case emqx_cm:lookup_channels(local, ServerId) of
-                        [] ->
-                            ok;
-                        [Pid | _] ->
-                            mcp_bridge_message:deliver_list_tools_request(Pid, ServerId, ServerName)
-                    end
+                [Pid | _] ->
+                    mcp_bridge_message:deliver_list_tools_request(Pid, ServerId, ServerName)
             end;
         {ok, Msg} ->
             ?SLOG(error, #{msg => unsupported_client_presence_msg, rpc_msg => Msg});
@@ -200,8 +206,8 @@ load_custom_tools() ->
                     case get_custom_tools(Mod) of
                         no_tools ->
                             ok;
-                        {ToolType, Tools, ToolOpts} ->
-                            save_custom_tools(Mod, ToolType, Tools, ToolOpts)
+                        {ToolType, ToolVsn, Tools, ToolOpts} ->
+                            save_custom_tools(Mod, ToolType, ToolVsn, Tools, ToolOpts)
                     end;
                 _ ->
                     ok
@@ -227,7 +233,12 @@ get_custom_tools(Module) ->
         {mcp_tool_type, [ToolType]} ->
             Tools = [format_tool(Tool, Module) || {mcp_tool, [Tool]} <- Attrs],
             ToolOpts = get_tool_opts(Attrs),
-            {bin(ToolType), Tools, ToolOpts};
+            case lists:keyfind(mcp_tool_vsn, 1, Attrs) of
+                {mcp_tool_vsn, [ToolVsn]} ->
+                    {bin(ToolType), ToolVsn, Tools, ToolOpts};
+                _ ->
+                    throw({missing_tool_version_definition, Module})
+            end;
         _ ->
             case lists:keyfind(mcp_tool, 1, Attrs) of
                 {mcp_tool, _} ->
@@ -298,14 +309,6 @@ maybe_add_target_client_param(#{<<"properties">> := Properties} = InputSchema) -
         _ ->
             InputSchema
     end.
-
-load_tools_from_result(_ServerId, ServerName, #{<<"tools">> := ToolsList}) ->
-    save_mcp_over_mqtt_tools(ServerName, ToolsList).
-
-load_tools_from_register_msg(_ServerId, ServerName, #{<<"meta">> := #{<<"tools">> := Tools}}) ->
-    save_mcp_over_mqtt_tools(ServerName, Tools);
-load_tools_from_register_msg(_ServerId, _ServerName, _Params) ->
-    {error, no_tools}.
 
 split_id_and_server_name(Str) ->
     %% Split the server_id and server_name from the topic

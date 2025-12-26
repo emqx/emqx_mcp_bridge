@@ -12,6 +12,8 @@
 %% are related to EMQX clients management.
 -mcp_tool_type(<<"emqx/clients">>).
 
+-mcp_tool_vsn(<<"1.0.0">>).
+
 -mcp_tool(#{
     %% Note that the 'name' field must be the callback function name defined below.
     name => get_client_status,

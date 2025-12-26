@@ -179,13 +179,13 @@ send_tools_call(
 ) ->
     Name = maps:get(<<"name">>, Params, <<>>),
     Result =
-        case string:split(Name, ":") of
-            [ToolType, ToolName] ->
+        case mcp_bridge_tools:unpack_tool_name(Name) of
+            {ToolType, _, ToolName} ->
                 case mcp_bridge_tool_registry:get_tools(ToolType) of
                     {ok, #{protocol := mcp_over_mqtt}} ->
                         send_mom_tools_call(ToolType, ToolName, HttpHeaders, JwtClaims, McpRequest);
                     {ok, #{protocol := custom, module := Module, tool_opts := ToolOpts}} ->
-                        send_custom_tool_call(
+                        send_custom_tools_call(
                             Module,
                             ToolType,
                             ToolName,
@@ -240,7 +240,7 @@ send_mom_tools_call(ToolType, ToolName, HttpHeaders, JwtClaims, #{params := Para
             end
     end.
 
-send_custom_tool_call(
+send_custom_tools_call(
     Module,
     ToolType,
     ToolName0,

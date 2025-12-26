@@ -66,6 +66,7 @@ Here is a minimal sample module that exports one tool that adds two numbers:
 -export([add/2]).
 
 -mcp_tool_type(<<"sample">>).
+-mcp_tool_vsn(<<"1.0.0">>).
 -mcp_tool(#{
     name => <<"add">>,
     title => <<"Add Tool">>,

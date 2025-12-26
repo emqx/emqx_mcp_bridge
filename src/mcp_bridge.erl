@@ -98,13 +98,7 @@ on_message_publish(
 ) ->
     {ServerId, ServerName} = split_id_and_server_name(ServerIdAndName),
     case mcp_bridge_message:decode_rpc_msg(PresenceMsg) of
-        {ok, #{method := <<"notifications/server/online">>, params := Params}} ->
-            case
-                mcp_bridge_tool_registry:load_tools_from_register_msg(ServerId, ServerName, Params)
-            of
-                ok -> ok;
-                {error, no_tools} -> erlang:put({?MODULE, need_list_tools}, true)
-            end,
+        {ok, #{method := <<"notifications/server/online">>}} ->
             initialize_mcp_server(#{server_id => ServerId, server_name => ServerName});
         {ok, Msg} ->
             ?SLOG(error, #{msg => unsupported_client_presence_msg, rpc_msg => Msg});
@@ -121,9 +115,15 @@ on_message_publish(
 ) ->
     {ServerId, ServerName} = split_id_and_server_name(ServerIdAndName),
     case mcp_bridge_message:decode_rpc_msg(PresenceMsg) of
-        {ok, #{id := ?INIT_REQ_ID, type := json_rpc_response}} ->
+        {ok, #{id := ?INIT_REQ_ID, type := json_rpc_response, result := Result}} ->
+            #{
+                <<"serverInfo">> := #{
+                    <<"version">> := ServerVsn
+                }
+            } = Result,
+            erlang:put({?MODULE, mcp_server_version}, ServerVsn),
             send_initialized_notification(ServerId, ServerName),
-            maybe_list_tools(ServerId, ServerName),
+            mcp_bridge_message:deliver_list_tools_request(self(), ServerId, ServerName),
             ?SLOG(info, #{
                 msg => received_initialize_response,
                 server_id => ServerId,
@@ -137,7 +137,9 @@ on_message_publish(
                 server_id => ServerId,
                 server_name => ServerName
             }),
-            mcp_bridge_tool_registry:load_tools_from_result(ServerId, ServerName, Result);
+            #{<<"tools">> := ToolsList} = Result,
+            ServerVsn = erlang:get({?MODULE, mcp_server_version}),
+            mcp_bridge_tool_registry:save_mcp_over_mqtt_tools(ServerName, ServerVsn, ToolsList);
         {ok, #{id := ?LIST_TOOLS_REQ_ID} = Response} ->
             ?SLOG(error, #{msg => list_tools_failed, rpc_response => Response});
         {ok, #{id := Id, type := json_rpc_response, result := Result}} ->
@@ -185,16 +187,6 @@ send_initialized_notification(ServerId, ServerName) ->
     NotifMsg = mcp_bridge_message:make_mqtt_msg(Topic, Notif, ?MCP_CLIENTID_B, #{}, 1),
     self() ! {deliver, Topic, NotifMsg},
     ok.
-
-maybe_list_tools(ServerId, ServerName) ->
-    case erlang:get({?MODULE, need_list_tools}) of
-        true ->
-            mcp_bridge_message:deliver_list_tools_request(self(), ServerId, ServerName),
-            erlang:erase({?MODULE, need_list_tools}),
-            ok;
-        undefined ->
-            ok
-    end.
 
 cache_request(McpMsgHeader, MqttId) ->
     CacheK = {?MODULE, request_cache},
