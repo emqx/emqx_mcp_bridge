@@ -16,6 +16,7 @@
 -define(INIT_REQ_ID, <<"init_1">>).
 -define(LIST_TOOLS_REQ_ID, <<"list_tools_1">>).
 
+-type request_id() :: binary().
 -type request_params() :: map().
 -type request_meta() :: map().
 -type response() :: map() | [map()].

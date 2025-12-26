@@ -276,7 +276,7 @@ get_tool_opts(Attrs) ->
     ).
 
 validate_tool_name(Name, Module) when is_atom(Name) ->
-    case erlang:function_exported(Module, Name, 2) of
+    case erlang:function_exported(Module, Name, 3) of
         true -> ok;
         false -> throw({invalid_tool_definition, Module, Name})
     end;

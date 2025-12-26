@@ -3,8 +3,8 @@
 -include("mcp_bridge.hrl").
 
 -export([
-    get_client_status/2,
-    publish_mqtt_message/2
+    get_client_status/3,
+    publish_mqtt_message/3
 ]).
 
 %% Tool type is used to categorize the tools. A module can define only one tool type.
@@ -82,8 +82,8 @@
     opts => #{}
 }).
 
--spec get_client_status(request_params(), request_meta()) -> {ok, response()} | {error, term()}.
-get_client_status(#{<<"client_id">> := ClientId}, #{opts := Opts} = _Meta) ->
+-spec get_client_status(request_id(), request_params(), request_meta()) -> {ok, response()} | {error, term()}.
+get_client_status(_ReqId, #{<<"client_id">> := ClientId}, #{opts := Opts} = _Meta) ->
     %% this is an example tool that returns the status of a given MQTT clientid
     case emqx_mgmt_api_clients:client(get, #{bindings => #{clientid => ClientId}}) of
         {200, ClientInfo} ->
@@ -92,8 +92,8 @@ get_client_status(#{<<"client_id">> := ClientId}, #{opts := Opts} = _Meta) ->
             {error, session_not_found}
     end.
 
--spec publish_mqtt_message(request_params(), request_meta()) -> {ok, term()} | {error, term()}.
-publish_mqtt_message(Params, #{opts := _Opts} = _Meta) ->
+-spec publish_mqtt_message(request_id(), request_params(), request_meta()) -> {ok, term()} | {error, term()}.
+publish_mqtt_message(_ReqId, Params, #{opts := _Opts} = _Meta) ->
     %% this is an example tool that publishes an MQTT message on behalf of a target clientid
     case emqx_mgmt_api_publish:publish(post, #{body => Params}) of
         {200, Response} -> {ok, Response};

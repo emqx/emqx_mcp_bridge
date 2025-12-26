@@ -10,6 +10,7 @@
     initialize_response/3,
     initialize_response/4,
     initialized_notification/0,
+    call_tools_request/3,
     list_tools_request/1,
     list_resources_response/2,
     list_prompts_response/2,
@@ -20,7 +21,9 @@
     deliver_list_tools_request/3,
     get_tools_list/3,
     send_tools_call/3,
-    send_mcp_request/5
+    send_mcp_request/5,
+    send_mom_tools_call/4,
+    send_custom_tools_call/7
 ]).
 
 -export([
@@ -69,6 +72,16 @@ initialize_response(Id, ServerInfo, Capabilities, Instructions) ->
 
 initialized_notification() ->
     json_rpc_notification(<<"notifications/initialized">>).
+
+call_tools_request(Id, Name, Arguments) ->
+    json_rpc_request(
+        Id,
+        <<"tools/call">>,
+        #{
+            <<"name">> => Name,
+            <<"arguments">> => Arguments
+        }
+    ).
 
 list_tools_request(Id) ->
     json_rpc_request(
@@ -183,7 +196,12 @@ send_tools_call(
             {ToolType, _, ToolName} ->
                 case mcp_bridge_tool_registry:get_tools(ToolType) of
                     {ok, #{protocol := mcp_over_mqtt}} ->
-                        send_mom_tools_call(ToolType, ToolName, HttpHeaders, JwtClaims, McpRequest);
+                        case get_target_clientid(HttpHeaders, JwtClaims, Params) of
+                            {error, Reason} ->
+                                {error, Reason};
+                            MqttClientId ->
+                                send_mom_tools_call(MqttClientId, ToolType, ToolName, McpRequest)
+                        end;
                     {ok, #{protocol := custom, module := Module, tool_opts := ToolOpts}} ->
                         send_custom_tools_call(
                             Module,
@@ -213,31 +231,26 @@ send_tools_call(
         end,
     call_tool_result(Result, McpReqId).
 
-send_mom_tools_call(ToolType, ToolName, HttpHeaders, JwtClaims, #{params := Params} = R) ->
-    case get_target_clientid(HttpHeaders, JwtClaims, Params) of
+send_mom_tools_call(MqttClientId, ToolType, ToolName, #{params := Params} = R) ->
+    Topic = mcp_bridge_topics:get_topic(rpc, #{
+        mcp_clientid => ?MCP_CLIENTID_B,
+        server_id => MqttClientId,
+        server_name => ToolType
+    }),
+    %% offload the target client id param if exists
+    Args = maps:get(<<"arguments">>, Params, #{}),
+    Params1 = Params#{<<"arguments">> => maps:remove(?TARGET_CLIENTID_KEY, Args)},
+    %% offload the tool type from the tool name
+    R1 = R#{params := Params1#{<<"name">> => ToolName}},
+    Meta = #{mqtt_clientid => MqttClientId},
+    case mcp_bridge_tools_mom:on_tools_call(ToolType, ToolName, Topic, R1, Meta) of
+        {ok, Topic, R2} ->
+            %% For MCP over MQTT clients, we always wait for a response
+            WaitResponse = true,
+            Timeout = maps:get(<<"timeout">>, Params, 5_000),
+            send_mcp_request(MqttClientId, Topic, R2, WaitResponse, Timeout);
         {error, Reason} ->
-            {error, Reason};
-        MqttClientId ->
-            Topic = mcp_bridge_topics:get_topic(rpc, #{
-                mcp_clientid => ?MCP_CLIENTID_B,
-                server_id => MqttClientId,
-                server_name => ToolType
-            }),
-            %% offload the target client id param if exists
-            Args = maps:get(<<"arguments">>, Params, #{}),
-            Params1 = Params#{<<"arguments">> => maps:remove(?TARGET_CLIENTID_KEY, Args)},
-            %% offload the tool type from the tool name
-            R1 = R#{params := Params1#{<<"name">> => ToolName}},
-            Meta = #{mqtt_clientid => MqttClientId},
-            case mcp_bridge_tools_mom:on_tools_call(ToolType, ToolName, Topic, R1, Meta) of
-                {ok, Topic, R2} ->
-                    %% For MCP over MQTT clients, we always wait for a response
-                    WaitResponse = true,
-                    Timeout = maps:get(<<"timeout">>, Params, 5_000),
-                    send_mcp_request(MqttClientId, Topic, R2, WaitResponse, Timeout);
-                {error, Reason} ->
-                    {error, Reason}
-            end
+            {error, Reason}
     end.
 
 send_custom_tools_call(
@@ -246,15 +259,15 @@ send_custom_tools_call(
     ToolName0,
     HttpHeaders,
     JwtClaims,
-    #{params := Params},
+    #{id := McpReqId, params := Params},
     ToolOpts
 ) ->
     try binary_to_existing_atom(ToolName0) of
         ToolName ->
-            case erlang:function_exported(Module, ToolName, 2) of
+            case erlang:function_exported(Module, ToolName, 3) of
                 true ->
                     try
-                        Module:ToolName(maps:get(<<"arguments">>, Params), #{
+                        Module:ToolName(McpReqId, maps:get(<<"arguments">>, Params), #{
                             http_headers => HttpHeaders,
                             jwt_claims => JwtClaims,
                             opts => maps:get(ToolName, ToolOpts, #{})

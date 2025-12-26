@@ -63,7 +63,7 @@ Here is a minimal sample module that exports one tool that adds two numbers:
 
 ```erlang
 -module(mcp_bridge_tools_sample).
--export([add/2]).
+-export([add/3]).
 
 -mcp_tool_type(<<"sample">>).
 -mcp_tool_vsn(<<"1.0.0">>).
@@ -90,7 +90,7 @@ Here is a minimal sample module that exports one tool that adds two numbers:
     opts => #{}
 }).
 
-add(#{<<"num1">> := Num1, <<"num2">> := Num2} = _Params, _Opts) ->
+add(_ReqId, #{<<"num1">> := Num1, <<"num2">> := Num2} = _Params, _Opts) ->
     {ok, Num1 + Num2}.
 ```
 
