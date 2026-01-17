@@ -11,6 +11,12 @@
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
 
 -export([
+    load_custom_tools/0,
+    load_mcp_over_mqtt_tools/0,
+    delete_custom_tools/0
+]).
+
+-export([
     create_table/0,
     delete_table/0,
     save_mcp_over_mqtt_tools/3,
@@ -115,6 +121,22 @@ maybe_inject_usage_notes(custom, _, _, Description) ->
 delete_tools(ToolType) ->
     mria:dirty_delete(?TAB, ToolType).
 
+delete_custom_tools() ->
+    %% delete all tools with protocol = custom
+    Objects =
+        mnesia:dirty_match_object(
+            #emqx_mcp_tool_registry{
+                protocol = custom,
+                _ = '_'
+            }
+        ),
+    lists:foreach(
+        fun(Records) ->
+            mria:dirty_delete_object(?TAB, Records)
+        end,
+        Objects
+    ).
+
 get_tools(ToolType) ->
     case mnesia:dirty_read(?TAB, ToolType) of
         [
@@ -199,22 +221,22 @@ code_change(_OldVsn, State, _Extra) ->
 %% Internal functions
 %%==============================================================================
 load_custom_tools() ->
-    lists:foreach(
-        fun({Mod, _}) ->
-            case atom_to_list(Mod) of
-                "mcp_bridge_tools_" ++ _ ->
+    case mcp_bridge:get_config() of
+        #{tool_modules := ToolModules} when is_list(ToolModules), ToolModules =/= [] ->
+            lists:foreach(
+                fun(Mod) ->
                     case get_custom_tools(Mod) of
                         no_tools ->
                             ok;
                         {ToolType, ToolVsn, Tools, ToolOpts} ->
                             save_custom_tools(Mod, ToolType, ToolVsn, Tools, ToolOpts)
-                    end;
-                _ ->
-                    ok
-            end
-        end,
-        code:all_loaded()
-    ).
+                    end
+                end,
+                ToolModules
+            );
+        _ ->
+            ok
+    end.
 
 load_mcp_over_mqtt_tools() ->
     %% simulate subscription to $mcp-server/presence/# to get retained messages

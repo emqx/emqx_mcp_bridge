@@ -11,6 +11,14 @@
     "zh": "监听地址必须是一个有效的URL。",
     "en": "The listening address must be a valid URL."
   },
+  "$tool_modules_label": {
+    "zh": "工具模块",
+    "en": "Tool Modules"
+  },
+  "$tool_modules_desc": {
+    "zh": "逗号分隔的字符串。指定从哪些 Erlang 模块读取自定义工具。如果为空，则不加载任何自定义工具。",
+    "en": "A comma-separated string. Specifies which Erlang modules to read custom tools from. If empty, no custom tools are loaded."
+  },
   "$get_target_clientid_from_label": {
     "zh": "获取目标 MQTT 客户端 ID 的方式",
     "en": "Method to Get Target MQTT Client ID"

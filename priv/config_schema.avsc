@@ -22,6 +22,17 @@
       }
     },
     {
+      "name": "tool_modules",
+      "type": "string",
+      "default": "",
+      "$ui": {
+        "component": "input",
+        "flex": 12,
+        "label": "$tool_modules_label",
+        "description": "$tool_modules_desc"
+      }
+    },
+    {
       "name": "get_target_clientid_from",
       "type": {
         "type": "enum",

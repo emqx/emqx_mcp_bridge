@@ -333,6 +333,16 @@ handle_cast({on_changed, OldConfig, NewConfig}, State) ->
         false ->
             ok
     end,
+    case need_reload_custom_tools(OldConfig, NewConfig) of
+        true ->
+            mcp_bridge_tool_registry:delete_custom_tools(),
+            mcp_bridge_tool_registry:load_custom_tools(),
+            ?SLOG(warning, #{
+                msg => mcp_bridge_custom_tools_reloaded_due_to_config_change, tag => ?MODULE
+            });
+        false ->
+            ok
+    end,
     {noreply, State};
 handle_cast(_Request, State) ->
     {noreply, State}.
@@ -354,9 +364,14 @@ need_restart_listener(OldConfig, NewConfig) when is_map(OldConfig), is_map(NewCo
         KeysToCheck
     ).
 
+need_reload_custom_tools(OldConfig, NewConfig) when is_map(OldConfig), is_map(NewConfig) ->
+    %% find out if tool_modules changed
+    maps:get(<<"tool_modules">>, OldConfig, <<>>) =/= maps:get(<<"tool_modules">>, NewConfig, <<>>).
+
 parse_config(#{<<"listening_address">> := URI} = Config) ->
     ListeningAddress = #{authority := #{host := Host} = Authority} = emqx_utils_uri:parse(URI),
     #{
+        tool_modules => to_module_names(maps:get(<<"tool_modules">>, Config, <<>>)),
         get_target_clientid_from => maps:get(
             <<"get_target_clientid_from">>, Config, <<"http_headers">>
         ),
@@ -386,4 +401,19 @@ split_id_and_server_name(Str) ->
     case string:split(Str, <<"/">>) of
         [ServerId, ServerName] -> {ServerId, ServerName};
         _ -> throw({error, {invalid_id_and_server_name, Str}})
+    end.
+
+to_module_names(<<>>) ->
+    [];
+to_module_names(ModuleStr) ->
+    [ensure_module_name(ModStr) || ModStr <- string:lexemes(ModuleStr, ", ")].
+
+ensure_module_name(ModStr) when is_binary(ModStr) ->
+    try
+        Mod = list_to_existing_atom(binary_to_list(ModStr)),
+        _ = Mod:module_info(),
+        Mod
+    catch
+        _:_ ->
+            throw({error, {module_not_exist, ModStr}})
     end.

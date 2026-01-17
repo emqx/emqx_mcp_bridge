@@ -3,6 +3,11 @@
 ## start 2 endpoints: "/sse" for old SSE MCP clients and "/your-path" for streamable MCP clients.
 listening_address = "http://0.0.0.0:9909/mcp"
 
+## Erlang modules where custom tool implementations are loaded from. Multiple modules can be
+## specified as a comma-separated string.
+## Example: "mcp_bridge_tools_clients, mcp_bridge_tools_other"
+tool_modules = ""
+
 ## Method to get target MQTT client ID when sending tools/call requests
 ## Can be one of the following:
 ##   - "tool_params": get from the parameters of the tools/call request
