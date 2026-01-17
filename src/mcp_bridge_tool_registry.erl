@@ -266,7 +266,7 @@ format_tool(Other, Module) ->
 get_tool_opts(Attrs) ->
     lists:foldl(
         fun
-            ({tool, [#{name := Name, opts := Opts}]}, Acc) ->
+            ({mcp_tool, [#{name := Name, opts := Opts}]}, Acc) ->
                 Acc#{Name => Opts};
             (_, Acc) ->
                 Acc
