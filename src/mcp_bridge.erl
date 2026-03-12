@@ -373,7 +373,7 @@ parse_config(#{<<"listening_address">> := URI} = Config) ->
     #{
         tool_modules => to_module_names(maps:get(<<"tool_modules">>, Config, <<>>)),
         get_target_clientid_from => maps:get(
-            <<"get_target_clientid_from">>, Config, <<"http_headers">>
+            <<"get_target_clientid_from">>, Config, <<"tool_params">>
         ),
         get_tool_types_from => maps:get(
             <<"get_tool_types_from">>, Config, <<"http_headers">>

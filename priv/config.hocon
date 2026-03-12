@@ -13,7 +13,7 @@ tool_modules = ""
 ##   - "tool_params": get from the parameters of the tools/call request
 ##   - "http_headers": get from the HTTP headers of the incoming request
 ##   - "jwt_claims": get from the JWT claims of the authenticated user
-get_target_clientid_from = "http_headers"
+get_target_clientid_from = "tool_params"
 
 ## Method to get tool types when listing tools
 ## Can be one of the following:

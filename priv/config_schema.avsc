@@ -43,7 +43,7 @@
           "jwt_claims"
         ]
       },
-      "default": "http_headers",
+      "default": "tool_params",
       "$ui": {
         "component": "select",
         "options": [
