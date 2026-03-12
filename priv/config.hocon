@@ -21,6 +21,9 @@ get_target_clientid_from = "http_headers"
 ##   - "jwt_claims": get from the JWT claims of the authenticated user
 get_tool_types_from = "http_headers"
 
+## Enable or disable authentication for the MCP bridge. If enabled, clients must provide a valid JWT token in the HTTP headers of their requests.
+enable_auth = false
+
 ## JWT secret for verifying JWT tokens in HTTP headers
 jwt_secret = "your_jwt_secret_here"
 

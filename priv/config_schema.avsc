@@ -94,6 +94,17 @@
       }
     },
     {
+      "name": "enable_auth",
+      "type": "boolean",
+      "default": false,
+      "$ui": {
+        "component": "switch",
+        "flex": 12,
+        "label": "$enable_auth_label",
+        "description": "$enable_auth_desc"
+      }
+    },
+    {
       "name": "jwt_secret",
       "type": "string",
       "default": "",

@@ -47,6 +47,14 @@
     "zh": "JWT 声明",
     "en": "JWT Claims"
   },
+  "$enable_auth_label": {
+    "zh": "启用认证",
+    "en": "Enable Authentication"
+  },
+  "$enable_auth_desc": {
+    "zh": "启用或禁用 MCP 桥接的认证。如果启用，客户端必须在 HTTP 头中提供有效的 JWT 令牌。",
+    "en": "Enable or disable authentication for the MCP bridge. If enabled, clients must provide a valid JWT token in the HTTP headers of their requests."
+  },
   "$jwt_secret_label": {
     "zh": "JWT 密钥",
     "en": "JWT Secret"

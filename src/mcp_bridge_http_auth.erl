@@ -7,7 +7,8 @@
 execute(Req, Env) ->
     Headers = cowboy_req:headers(Req),
     JwtToken = get_jwt_token(Headers),
-    case validate_jwt(JwtToken) of
+    #{jwt_secret := Secret, enable_auth := EnableAuth} = mcp_bridge:get_config(),
+    case maybe_validate_jwt(JwtToken, Secret, EnableAuth) of
         {ok, JwtClaims} ->
             {ok, Req#{jwt_claims => JwtClaims}, Env};
         {error, invalid_token} ->
@@ -21,11 +22,23 @@ get_jwt_token(Headers) ->
         _ -> undefined
     end.
 
-validate_jwt(undefined) ->
-    %% Allow requests without JWT for now
+maybe_validate_jwt(undefined, _Secret, false) ->
+    %% Allow requests without JWT when authentication is disabled
     {ok, #{}};
-validate_jwt(JwtToken) ->
-    #{jwt_secret := Secret} = mcp_bridge:get_config(),
+maybe_validate_jwt(undefined, _Secret, true) ->
+    %% Require JWT when authentication is enabled
+    {error, invalid_token};
+maybe_validate_jwt(JwtToken, _Secret, false) ->
+    %% When authentication is disabled, we still decode the JWT to extract claims for
+    %% getting tool types if the token is present, but we don't verify it
+    try
+        {_, #{<<"payload">> := Payload}} = jose_jws:expand(JwtToken),
+        Claims = emqx_utils_json:decode(Payload),
+        {ok, Claims}
+    catch
+        _:_ -> {ok, #{}}
+    end;
+maybe_validate_jwt(JwtToken, Secret, true) ->
     try
         {true, Payload, _} = jose_jws:verify(jose_jwk:from_oct(Secret), JwtToken),
         Claims = emqx_utils_json:decode(Payload),

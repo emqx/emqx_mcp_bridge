@@ -381,6 +381,7 @@ parse_config(#{<<"listening_address">> := URI} = Config) ->
         listening_address => ListeningAddress#{
             authority := Authority#{host := parse_address(Host)}
         },
+        enable_auth => maps:get(<<"enable_auth">>, Config, false),
         jwt_secret => maps:get(<<"jwt_secret">>, Config, <<"">>),
         certfile => maps:get(<<"certfile">>, Config, <<"">>),
         keyfile => maps:get(<<"keyfile">>, Config, <<"">>)
